@@ -1,0 +1,165 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+:root {
+  --background: #fdfaf7;
+  --foreground: #1c1917;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d6d3d1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a29e;
+}
+
+/* ============================================================== */
+/* THERMAL RECEIPT PRINT STYLES - 1 SINGLE SHEET ENFORCEMENT       */
+/* Auto-Adjusts Height For Short & Long Bills (Zero Paper Waste)  */
+/* ============================================================== */
+@media print {
+  /* Hide all non-receipt elements completely so they take 0px height */
+  .print-hidden,
+  .no-print,
+  header,
+  nav,
+  main,
+  footer {
+    display: none !important;
+  }
+
+  html, body {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+
+  /* Reset all containers so min-h-screen doesn't calculate 3 sheets of paper */
+  body, body *, div {
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  /* Make modal overlay completely flat and unstyled during print */
+  .receipt-modal-backdrop {
+    position: static !important;
+    display: block !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    backdrop-filter: none !important;
+  }
+
+  .receipt-modal-card {
+    position: static !important;
+    display: block !important;
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+
+  .receipt-modal-scroll-area {
+    position: static !important;
+    display: block !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Print Content Area */
+  #thermal-receipt-print-area {
+    position: relative !important;
+    display: block !important;
+    /* 72mm matches the thermal head width of POS-80C / 80mm printers */
+    width: 72mm !important;
+    max-width: 72mm !important;
+    margin: 0 auto !important;
+    padding: 1mm 2mm 3mm 2mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+    font-size: 11.5px !important;
+    line-height: 1.3 !important;
+    font-weight: 400 !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    page-break-before: avoid !important;
+    break-before: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* 58mm Mini Roll Mode */
+  #thermal-receipt-print-area.paper-58mm {
+    width: 48mm !important;
+    max-width: 48mm !important;
+    padding: 1mm 1.5mm !important;
+    font-size: 10px !important;
+  }
+
+  #thermal-receipt-print-area * {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    border-color: #000000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  #thermal-receipt-print-area img.receipt-logo {
+    filter: grayscale(100%) !important;
+    max-width: 40px !important;
+    max-height: 40px !important;
+    margin: 0 auto 2px auto !important;
+    display: block !important;
+  }
+
+  /* Automatic page height so printer cuts right after the content */
+  @page {
+    size: auto;
+    margin: 0mm !important;
+  }
+}
