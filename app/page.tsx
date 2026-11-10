@@ -70,6 +70,16 @@ export default function PosApp() {
     }
   }, [fetchData]);
 
+  // Live Auto-Refresh for Kitchen KDS screen (every 3 seconds)
+  useEffect(() => {
+    if (activeTab === 'kds') {
+      const timer = setInterval(() => {
+        fetchData();
+      }, 3000);
+      return () => clearInterval(timer);
+    }
+  }, [activeTab, fetchData]);
+
   // Handle Audio Toggle
   const handleSetAudioEnabled = (val: boolean) => {
     setAudioEnabled(val);

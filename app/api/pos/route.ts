@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
       const orderType = ['takeaway', 'dine_in', 'delivery'].includes(b.order_type) ? b.order_type : 'takeaway';
       const tableNo = String(b.table_no || '').slice(0, 30);
       const notes = String(b.notes || '').slice(0, 300);
-      const status = String(b.status || (orderType === 'dine_in' ? 'preparing' : 'completed'));
+      const status = String(b.status || 'preparing');
       const cashier = String(b.cashier || 'Cashier 1');
 
       const sale = {
