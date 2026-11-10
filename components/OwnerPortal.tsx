@@ -32,7 +32,9 @@ import {
   Send,
   Server,
   AlertCircle,
-  Loader2
+  Loader2,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Category, Product, Customer, Sale, SummaryStats } from '@/lib/types';
 import { formatRupees, formatShortRupees, centsToRupees } from '@/lib/utils';
@@ -99,6 +101,7 @@ export default function OwnerPortal({
   const [smtpPort, setSmtpPort] = useState(settings.smtp_port || '587');
   const [smtpUser, setSmtpUser] = useState(settings.smtp_user || '');
   const [smtpPass, setSmtpPass] = useState(settings.smtp_pass || '');
+  const [showSmtpPass, setShowSmtpPass] = useState(false);
   const [smtpFromName, setSmtpFromName] = useState(settings.smtp_from_name || 'EATmi BAKERY & CAFE');
   const [smtpSecure, setSmtpSecure] = useState(settings.smtp_secure === 'true');
   const [emailSettingsMessage, setEmailSettingsMessage] = useState('');
@@ -2172,16 +2175,35 @@ export default function OwnerPortal({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-stone-700 mb-1">
-                      App Password / Email Password
+                    <label className="block text-xs font-semibold text-stone-700 mb-1 flex items-center justify-between">
+                      <span>Google 16-Character App Password</span>
+                      <a
+                        href="https://myaccount.google.com/apppasswords"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-blue-600 hover:text-blue-800 underline font-semibold flex items-center gap-1"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Open Google App Passwords</span>
+                      </a>
                     </label>
-                    <input
-                      type="password"
-                      value={smtpPass}
-                      onChange={e => setSmtpPass(e.target.value)}
-                      placeholder="16-character Google App Password"
-                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showSmtpPass ? 'text' : 'password'}
+                        value={smtpPass}
+                        onChange={e => setSmtpPass(e.target.value.replace(/\s+/g, ''))}
+                        placeholder="e.g. abcd efgh ijkl mnop"
+                        className="w-full px-3 py-2 pr-10 rounded-xl border border-stone-300 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSmtpPass(!showSmtpPass)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1"
+                        title={showSmtpPass ? 'Hide password' : 'Show password'}
+                      >
+                        {showSmtpPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
 
                   <div>
@@ -2225,16 +2247,38 @@ export default function OwnerPortal({
                 </div>
 
                 {/* Gmail App Password Instructions */}
-                <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/60 text-[11px] text-blue-900 space-y-1">
-                  <span className="font-bold flex items-center gap-1.5 text-blue-800">
-                    <HelpCircle className="w-3.5 h-3.5" />
-                    How to get a Gmail App Password (1-Minute Setup):
-                  </span>
-                  <ol className="list-decimal pl-4 space-y-0.5 text-blue-800/90 text-[10.5px]">
-                    <li>Go to your Google Account at <b>myaccount.google.com/security</b>.</li>
-                    <li>Ensure <b>2-Step Verification</b> is turned ON.</li>
-                    <li>Search for <b>"App passwords"</b> in the top search bar.</li>
-                    <li>Create a new app password named <b>"EATmi POS"</b> and copy the 16 letters into the password field above.</li>
+                <div className="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 text-[11px] text-blue-900 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold flex items-center gap-1.5 text-blue-900">
+                      <HelpCircle className="w-4 h-4 text-blue-700" />
+                      Google Requires a 16-Character "App Password" (Not Your Account Password):
+                    </span>
+                    <a
+                      href="https://myaccount.google.com/apppasswords"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10.5px] flex items-center gap-1 shadow-xs transition"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Generate Password on Google</span>
+                    </a>
+                  </div>
+                  <ol className="list-decimal pl-4 space-y-1 text-blue-900/90 text-[11px]">
+                    <li>
+                      Ensure <b>2-Step Verification</b> is turned <b>ON</b> on your Google Account (<a href="https://myaccount.google.com/security" target="_blank" rel="noreferrer" className="underline font-semibold">myaccount.google.com/security</a>).
+                    </li>
+                    <li>
+                      Click the button above or visit <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="underline font-semibold">myaccount.google.com/apppasswords</a>.
+                    </li>
+                    <li>
+                      Type <b>"EATmi POS"</b> in the App Name box and click <b>Create</b>.
+                    </li>
+                    <li>
+                      Google will show you a yellow box with a <b>16-letter password</b> (e.g. <span className="font-mono bg-blue-100/70 px-1 py-0.5 rounded font-bold">abcd efgh ijkl mnop</span>).
+                    </li>
+                    <li>
+                      Copy and paste those 16 letters into the password field above, then click <b>Save Email Settings</b>.
+                    </li>
                   </ol>
                 </div>
 

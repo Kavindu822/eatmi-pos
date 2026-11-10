@@ -20,10 +20,36 @@ export async function POST(req: NextRequest) {
 
     const smtpHost = body.smtp_host || settings.smtp_host || 'smtp.gmail.com';
     const smtpPort = Number(body.smtp_port || settings.smtp_port) || 587;
-    const smtpUser = body.smtp_user || settings.smtp_user || '';
-    const smtpPass = body.smtp_pass || settings.smtp_pass || '';
+    const smtpUser = String(body.smtp_user || settings.smtp_user || '').trim();
+    const smtpPass = String(body.smtp_pass || settings.smtp_pass || '').trim().replace(/\s+/g, '');
     const smtpFromName = body.smtp_from_name || settings.smtp_from_name || settings.receipt_store_name || 'EATmi BAKERY & CAFE';
     const smtpSecure = body.smtp_secure !== undefined ? (body.smtp_secure === 'true' || body.smtp_secure === true) : (settings.smtp_secure === 'true' || smtpPort === 465);
+
+    const isGmail = smtpHost.toLowerCase().includes('gmail') || smtpUser.toLowerCase().endsWith('@gmail.com');
+
+    const getTransporter = () => {
+      if (isGmail) {
+        return nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: smtpUser,
+            pass: smtpPass
+          }
+        });
+      }
+      return nodemailer.createTransport({
+        host: smtpHost || 'smtp.gmail.com',
+        port: smtpPort,
+        secure: smtpSecure,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+    };
 
     const storeName = settings.receipt_store_name || 'EATmi BAKERY & CAFE';
     const tagline = settings.receipt_tagline || 'ARTISAN PÂTISSERIE & ROASTERY';
@@ -43,19 +69,7 @@ export async function POST(req: NextRequest) {
         }, { status: 400 });
       }
 
-      const transporter = nodemailer.createTransport({
-        host: smtpHost || 'smtp.gmail.com',
-        port: smtpPort,
-        secure: smtpSecure,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass
-        },
-        tls: {
-          rejectUnauthorized: false
-        }
-      });
-
+      const transporter = getTransporter();
       await transporter.verify();
 
       await transporter.sendMail({
@@ -331,18 +345,7 @@ export async function POST(req: NextRequest) {
       </html>
     `;
 
-    const transporter = nodemailer.createTransport({
-      host: smtpHost || 'smtp.gmail.com',
-      port: smtpPort,
-      secure: smtpSecure,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
+    const transporter = getTransporter();
 
     await transporter.sendMail({
       from: `"${smtpFromName}" <${smtpUser}>`,
