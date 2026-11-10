@@ -115,37 +115,6 @@ export default function ThermalReceiptModal({
     });
   };
 
-  // 3. Print 1 Bill + 1 KOT in sequence
-  const handlePrintBoth = () => {
-    setPrintStatus('Step 1/2: Printing Customer Bill...');
-    const billHtml = generateReceiptHtml({
-      sale,
-      customerPointsBalance,
-      settings,
-      slipType: 'customer',
-      paperWidth,
-      showLogo
-    });
-
-    printReceiptHtml(billHtml, () => {
-      setPrintStatus('Step 2/2: Ready to Print Kitchen KOT...');
-      setTimeout(() => {
-        const kotHtml = generateReceiptHtml({
-          sale,
-          customerPointsBalance,
-          settings,
-          slipType: 'kitchen',
-          paperWidth,
-          showLogo: false
-        });
-        printReceiptHtml(kotHtml, () => {
-          setPrintStatus('1 Bill + 1 KOT Sent to Printer!');
-          setTimeout(() => setPrintStatus(''), 2500);
-        });
-      }, 700);
-    });
-  };
-
   const formattedDate = new Date(sale.created).toLocaleString('en-LK', {
     dateStyle: 'medium',
     timeStyle: 'short'
@@ -935,16 +904,6 @@ export default function ThermalReceiptModal({
             >
               <Printer className="w-3.5 h-3.5 text-amber-400" />
               <span>Print Bill (1x)</span>
-            </button>
-
-            {/* Print 1 Bill + 1 KOT */}
-            <button
-              onClick={handlePrintBoth}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-md transition"
-              title="Prints 1 Customer Bill, followed immediately by 1 Kitchen KOT"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-white" />
-              <span>1 Bill + 1 KOT</span>
             </button>
           </div>
         </div>
