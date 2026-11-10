@@ -97,6 +97,9 @@ export default function ProductModal({
       setError('Upload failed. Please check network.');
     } finally {
       setUploading(false);
+      try {
+        if (e.target) e.target.value = '';
+      } catch {}
     }
   };
 
@@ -284,36 +287,82 @@ export default function ProductModal({
           <div className="space-y-2">
             <label className="block text-xs font-semibold text-stone-700">Product Photo</label>
 
-            {/* Preview */}
-            {image && (
-              <div className="relative w-full h-32 rounded-xl overflow-hidden border border-stone-200 group bg-stone-100">
+            {/* Preview or Drag & Drop Upload Area */}
+            {image ? (
+              <div className="relative w-full h-36 rounded-xl overflow-hidden border border-stone-200 group bg-stone-100">
                 <img src={image} alt="Preview" className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => setImage('')}
-                  className="absolute top-2 right-2 p-1 rounded-lg bg-black/60 text-white hover:bg-black text-xs transition"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+                  <label className="cursor-pointer px-3 py-1.5 rounded-lg bg-white/90 text-stone-900 text-xs font-bold hover:bg-white transition flex items-center gap-1.5 shadow-sm">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Change</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      disabled={uploading}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setImage('')}
+                    className="p-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 text-xs transition shadow-sm"
+                    title="Remove Image"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
+            ) : (
+              <label
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) {
+                    const syntheticEvent = { target: { files: [file], value: '' } } as any;
+                    handleFileUpload(syntheticEvent);
+                  }
+                }}
+                className="cursor-pointer border-2 border-dashed border-stone-300 hover:border-amber-500 rounded-xl p-4 flex flex-col items-center justify-center gap-2 bg-stone-50 hover:bg-amber-50/50 transition group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-white border border-stone-200 flex items-center justify-center text-stone-500 group-hover:text-amber-600 group-hover:scale-105 transition shadow-xs">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <div className="text-center">
+                  <span className="text-xs font-bold text-stone-800 block">
+                    {uploading ? 'Uploading photo...' : 'Click or drag product photo here'}
+                  </span>
+                  <span className="text-[10.5px] text-stone-500">
+                    Supports JPG, PNG, WEBP, JFIF, AVIF (from camera, phone or desktop)
+                  </span>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                  className="hidden"
+                />
+              </label>
             )}
 
-            {/* URL Input & File Upload */}
+            {/* URL Input & Direct Upload Button */}
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <ImageIcon className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                 <input
-                  type="url"
-                  placeholder="Paste image URL (https://...)"
+                  type="text"
+                  placeholder="Or paste image URL (https://... or /uploads/...)"
                   value={image}
                   onChange={e => setImage(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-stone-300 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-stone-300 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
                 />
               </div>
 
-              <label className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold border border-stone-300 transition">
+              <label className="cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold border border-stone-300 transition shrink-0">
                 <Upload className="w-3.5 h-3.5 text-stone-500" />
-                <span>{uploading ? 'Uploading...' : 'Upload File'}</span>
+                <span>{uploading ? 'Uploading...' : 'Browse File'}</span>
                 <input
                   type="file"
                   accept="image/*"

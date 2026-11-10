@@ -27,7 +27,12 @@ import {
   Check,
   HelpCircle,
   Receipt,
-  Utensils
+  Utensils,
+  Mail,
+  Send,
+  Server,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { Category, Product, Customer, Sale, SummaryStats } from '@/lib/types';
 import { formatRupees, formatShortRupees, centsToRupees } from '@/lib/utils';
@@ -89,6 +94,19 @@ export default function OwnerPortal({
   const [isSavingLoyaltyRate, setIsSavingLoyaltyRate] = useState(false);
   const [loyaltyRateMessage, setLoyaltyRateMessage] = useState('');
 
+  // Automated Email & SMTP Settings State
+  const [smtpHost, setSmtpHost] = useState(settings.smtp_host || 'smtp.gmail.com');
+  const [smtpPort, setSmtpPort] = useState(settings.smtp_port || '587');
+  const [smtpUser, setSmtpUser] = useState(settings.smtp_user || '');
+  const [smtpPass, setSmtpPass] = useState(settings.smtp_pass || '');
+  const [smtpFromName, setSmtpFromName] = useState(settings.smtp_from_name || 'EATmi BAKERY & CAFE');
+  const [smtpSecure, setSmtpSecure] = useState(settings.smtp_secure === 'true');
+  const [emailSettingsMessage, setEmailSettingsMessage] = useState('');
+  const [isSavingEmailSettings, setIsSavingEmailSettings] = useState(false);
+  const [testEmailAddress, setTestEmailAddress] = useState('');
+  const [testEmailStatus, setTestEmailStatus] = useState('');
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+
   React.useEffect(() => {
     if (settings.receipt_store_name) setReceiptStoreName(settings.receipt_store_name);
     if (settings.receipt_tagline) setReceiptTagline(settings.receipt_tagline);
@@ -110,6 +128,12 @@ export default function OwnerPortal({
       setLoyaltyRate(Number(settings.loyalty_rate_rupees) || 300);
       setLoyaltyRateInput(settings.loyalty_rate_rupees);
     }
+    if (settings.smtp_host) setSmtpHost(settings.smtp_host);
+    if (settings.smtp_port) setSmtpPort(settings.smtp_port);
+    if (settings.smtp_user) setSmtpUser(settings.smtp_user);
+    if (settings.smtp_pass) setSmtpPass(settings.smtp_pass);
+    if (settings.smtp_from_name) setSmtpFromName(settings.smtp_from_name);
+    if (settings.smtp_secure !== undefined) setSmtpSecure(settings.smtp_secure === 'true');
   }, [settings]);
 
   // Modals state
@@ -243,6 +267,81 @@ export default function OwnerPortal({
       }
     } catch (err) {
       setRecoveryMessage('Network error saving recovery settings');
+    }
+  };
+
+  // Save Email & SMTP Server Settings
+  const handleSaveEmailSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingEmailSettings(true);
+    setEmailSettingsMessage('');
+    try {
+      const res = await fetch('/api/pos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_email_settings',
+          smtp_host: smtpHost.trim(),
+          smtp_port: smtpPort.trim(),
+          smtp_user: smtpUser.trim(),
+          smtp_pass: smtpPass.trim(),
+          smtp_from_name: smtpFromName.trim(),
+          smtp_secure: smtpSecure ? 'true' : 'false'
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setEmailSettingsMessage('✅ Email & SMTP configuration saved successfully!');
+        await onRefreshData();
+      } else {
+        setEmailSettingsMessage('❌ ' + (data.error || 'Failed to save email settings'));
+      }
+    } catch (err: any) {
+      setEmailSettingsMessage('❌ Network error saving email settings');
+    } finally {
+      setIsSavingEmailSettings(false);
+      setTimeout(() => setEmailSettingsMessage(''), 6000);
+    }
+  };
+
+  // Test SMTP Email Connection & Dispatch
+  const handleTestEmail = async () => {
+    const target = (testEmailAddress || smtpUser).trim();
+    if (!target) {
+      setTestEmailStatus('⚠️ Please enter an email address to send the test message to.');
+      return;
+    }
+    if (!smtpUser.trim() || !smtpPass.trim()) {
+      setTestEmailStatus('⚠️ Please enter your SMTP Username (email) and Password / App Password first.');
+      return;
+    }
+    setIsSendingTestEmail(true);
+    setTestEmailStatus(`Testing connection and sending test email to ${target}...`);
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'test_smtp',
+          to: target,
+          smtp_host: smtpHost.trim(),
+          smtp_port: smtpPort.trim(),
+          smtp_user: smtpUser.trim(),
+          smtp_pass: smtpPass.trim(),
+          smtp_from_name: smtpFromName.trim(),
+          smtp_secure: smtpSecure ? 'true' : 'false'
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setTestEmailStatus(`✅ ${data.message || 'Success! Test email delivered.'}`);
+      } else {
+        setTestEmailStatus(`❌ ${data.error || 'SMTP test failed.'}`);
+      }
+    } catch (err: any) {
+      setTestEmailStatus(`❌ Error: ${err.message || 'Failed to test SMTP connection.'}`);
+    } finally {
+      setIsSendingTestEmail(false);
     }
   };
 
@@ -421,7 +520,7 @@ export default function OwnerPortal({
             { id: 'loyalty', label: `Loyalty (Rs. ${loyaltyRate} = 1pt)`, icon: Award },
             { id: 'reports', label: 'Daily Z-Report & Sales', icon: FileText },
             { id: 'printer', label: 'Receipt & Printer Settings', icon: Printer },
-            { id: 'settings', label: 'Security & Access', icon: Lock },
+            { id: 'settings', label: 'Email & Security Settings', icon: Mail },
           ].map(tab => {
             const Icon = tab.icon;
             const isCurrent = subTab === tab.id;
@@ -1983,6 +2082,220 @@ export default function OwnerPortal({
                 <p>
                   If you are standing at the shop computer and completely forgot both your PIN and master key, simply double-click <b>`ResetPin.cmd`</b> on the desktop to immediately reset the PIN back to <b className="font-mono text-amber-700">1234</b>.
                 </p>
+              </div>
+            </div>
+
+            {/* Automated Customer Email & SMTP Settings */}
+            <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center font-bold">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-stone-900">Customer Digital E-Bill & SMTP Settings</h3>
+                    <p className="text-[11px] text-stone-500">
+                      Configure your email service (e.g. Gmail) to deliver automated HTML tax invoices directly to customers
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                    smtpUser && smtpPass ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {smtpUser && smtpPass ? '● SMTP Configured' : '○ Not Configured'}
+                </span>
+              </div>
+
+              {emailSettingsMessage && (
+                <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 text-xs font-semibold">
+                  {emailSettingsMessage}
+                </div>
+              )}
+
+              {/* Quick Preset Buttons */}
+              <div className="flex items-center gap-2 text-xs flex-wrap">
+                <span className="text-stone-500 text-[11px] font-semibold">1-Click Presets:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSmtpHost('smtp.gmail.com');
+                    setSmtpPort('587');
+                    setSmtpSecure(false);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[11px] font-semibold transition"
+                >
+                  Gmail (Recommended)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSmtpHost('smtp.office365.com');
+                    setSmtpPort('587');
+                    setSmtpSecure(false);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-[11px] font-semibold transition"
+                >
+                  Outlook / Hotmail
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEmailSettings} className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Sender Name (Appears on Bills)
+                    </label>
+                    <input
+                      type="text"
+                      value={smtpFromName}
+                      onChange={e => setSmtpFromName(e.target.value)}
+                      placeholder="e.g. EATmi BAKERY & CAFE"
+                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Sender Email (SMTP Username)
+                    </label>
+                    <input
+                      type="email"
+                      value={smtpUser}
+                      onChange={e => setSmtpUser(e.target.value)}
+                      placeholder="e.g. yourbakery@gmail.com"
+                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      App Password / Email Password
+                    </label>
+                    <input
+                      type="password"
+                      value={smtpPass}
+                      onChange={e => setSmtpPass(e.target.value)}
+                      placeholder="16-character Google App Password"
+                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">Port</label>
+                    <input
+                      type="text"
+                      value={smtpPort}
+                      onChange={e => setSmtpPort(e.target.value)}
+                      placeholder="587 or 465"
+                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      SMTP Host Server
+                    </label>
+                    <input
+                      type="text"
+                      value={smtpHost}
+                      onChange={e => setSmtpHost(e.target.value)}
+                      placeholder="smtp.gmail.com"
+                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="pt-4 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="smtpSecureCheck"
+                      checked={smtpSecure}
+                      onChange={e => setSmtpSecure(e.target.checked)}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    <label htmlFor="smtpSecureCheck" className="text-xs font-medium text-stone-700 cursor-pointer">
+                      Use SSL Encryption (Port 465)
+                    </label>
+                  </div>
+                </div>
+
+                {/* Gmail App Password Instructions */}
+                <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/60 text-[11px] text-blue-900 space-y-1">
+                  <span className="font-bold flex items-center gap-1.5 text-blue-800">
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    How to get a Gmail App Password (1-Minute Setup):
+                  </span>
+                  <ol className="list-decimal pl-4 space-y-0.5 text-blue-800/90 text-[10.5px]">
+                    <li>Go to your Google Account at <b>myaccount.google.com/security</b>.</li>
+                    <li>Ensure <b>2-Step Verification</b> is turned ON.</li>
+                    <li>Search for <b>"App passwords"</b> in the top search bar.</li>
+                    <li>Create a new app password named <b>"EATmi POS"</b> and copy the 16 letters into the password field above.</li>
+                  </ol>
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSavingEmailSettings}
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 transition disabled:opacity-50"
+                  >
+                    {isSavingEmailSettings ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Save Email Settings</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              {/* Send Test Email Section */}
+              <div className="pt-3 border-t border-stone-200 space-y-2">
+                <span className="text-xs font-bold text-stone-800 block">
+                  Verify & Test Email Delivery
+                </span>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={testEmailAddress}
+                    onChange={e => setTestEmailAddress(e.target.value)}
+                    placeholder={smtpUser || 'Enter email to receive test'}
+                    className="flex-1 px-3 py-2 rounded-xl border border-stone-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTestEmail}
+                    disabled={isSendingTestEmail}
+                    className="px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-900 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition whitespace-nowrap disabled:opacity-50"
+                  >
+                    {isSendingTestEmail ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Sending Test...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Send Test Email</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {testEmailStatus && (
+                  <div className="text-[11px] p-2.5 rounded-lg bg-stone-50 border border-stone-200 font-medium">
+                    {testEmailStatus}
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -552,7 +552,13 @@ export async function POST(req: NextRequest) {
         'receipt_show_loyalty',
         'receipt_show_barcode',
         'receipt_auto_cut_margin',
-        'loyalty_rate_rupees'
+        'loyalty_rate_rupees',
+        'smtp_host',
+        'smtp_port',
+        'smtp_user',
+        'smtp_pass',
+        'smtp_from_name',
+        'smtp_secure'
       ];
 
       for (const key of allowedKeys) {
@@ -561,7 +567,20 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      return NextResponse.json({ ok: true, message: 'Receipt printing settings saved successfully!' });
+      return NextResponse.json({ ok: true, message: 'Settings saved successfully!' });
+    }
+
+    // -------------------------------------------------------------
+    // ACTION: update_email_settings (Configure SMTP Server)
+    // -------------------------------------------------------------
+    if (b.action === 'update_email_settings') {
+      const emailKeys = ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from_name', 'smtp_secure'];
+      for (const key of emailKeys) {
+        if (b[key] !== undefined) {
+          db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)").run(key, String(b[key]));
+        }
+      }
+      return NextResponse.json({ ok: true, message: 'Email & SMTP settings saved successfully!' });
     }
 
     // -------------------------------------------------------------

@@ -147,6 +147,12 @@ export function getDatabase(): DatabaseSync {
   ensureSetting('receipt_show_barcode', 'false');
   ensureSetting('receipt_auto_cut_margin', 'compact');
   ensureSetting('loyalty_rate_rupees', '300');
+  ensureSetting('smtp_host', 'smtp.gmail.com');
+  ensureSetting('smtp_port', '587');
+  ensureSetting('smtp_user', '');
+  ensureSetting('smtp_pass', '');
+  ensureSetting('smtp_from_name', 'EATmi BAKERY & CAFE');
+  ensureSetting('smtp_secure', 'false');
 
   // 6. Ensure Default Categories Exist
   const defaultCategories = [
