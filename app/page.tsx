@@ -61,6 +61,11 @@ export default function PosApp() {
 
   useEffect(() => {
     fetchData();
+    // Safety timer: Ensure splash screen dismisses even on slow mobile networks
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 3500);
+
     // Check saved audio preference
     if (typeof window !== 'undefined') {
       const savedAudio = localStorage.getItem('pos_audio_enabled');
@@ -68,6 +73,7 @@ export default function PosApp() {
       const savedOwner = sessionStorage.getItem('pos_owner_unlocked');
       if (savedOwner === 'true') setIsOwnerUnlocked(true);
     }
+    return () => clearTimeout(safetyTimer);
   }, [fetchData]);
 
   // Live Background Sync between Cashier PC and Remote Supervisor
