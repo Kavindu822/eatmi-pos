@@ -9,7 +9,7 @@ echo.
 
 if not exist cloudflared.exe (
     echo [Setup] Downloading Cloudflare Tunnel (One-time download)...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object System.Net.WebClient).DownloadFile('https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe', 'cloudflared.exe')"
+    curl.exe -L -o cloudflared.exe "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
     if not exist cloudflared.exe (
         echo [Error] Download failed. Please check your internet connection.
         pause
@@ -27,5 +27,9 @@ echo  3. Copy that link and open it on your phone or laptop!
 echo --------------------------------------------------------
 echo.
 
-cloudflared.exe tunnel --url http://localhost:8787
+.\cloudflared.exe tunnel --url http://127.0.0.1:8787
+if errorlevel 1 (
+    echo.
+    echo Cloudflare tunnel stopped or encountered an error.
+)
 pause
