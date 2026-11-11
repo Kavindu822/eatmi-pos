@@ -34,7 +34,9 @@ import {
   AlertCircle,
   Loader2,
   Eye,
-  EyeOff
+  EyeOff,
+  Database,
+  Download
 } from 'lucide-react';
 import { Category, Product, Customer, Sale, SummaryStats } from '@/lib/types';
 import { formatRupees, formatShortRupees, centsToRupees } from '@/lib/utils';
@@ -109,6 +111,8 @@ export default function OwnerPortal({
   const [testEmailAddress, setTestEmailAddress] = useState('');
   const [testEmailStatus, setTestEmailStatus] = useState('');
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const [isBackingUpDb, setIsBackingUpDb] = useState(false);
+  const [backupDbStatus, setBackupDbStatus] = useState('');
 
   React.useEffect(() => {
     if (settings.receipt_store_name) setReceiptStoreName(settings.receipt_store_name);
@@ -345,6 +349,47 @@ export default function OwnerPortal({
       setTestEmailStatus(`❌ Error: ${err.message || 'Failed to test SMTP connection.'}`);
     } finally {
       setIsSendingTestEmail(false);
+    }
+  };
+
+  // Email Complete SQLite Database Backup
+  const handleEmailDbBackup = async () => {
+    const target = (testEmailAddress || smtpUser).trim();
+    if (!target) {
+      setBackupDbStatus('⚠️ Please enter an email address to receive the database backup.');
+      return;
+    }
+    if (!smtpUser.trim() || !smtpPass.trim()) {
+      setBackupDbStatus('⚠️ Please configure and save your Gmail SMTP credentials above first.');
+      return;
+    }
+    setIsBackingUpDb(true);
+    setBackupDbStatus(`Attaching counter.sqlite database and emailing to ${target}...`);
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'backup_db',
+          to: target,
+          smtp_host: smtpHost.trim(),
+          smtp_port: smtpPort.trim(),
+          smtp_user: smtpUser.trim(),
+          smtp_pass: smtpPass.trim(),
+          smtp_from_name: smtpFromName.trim(),
+          smtp_secure: smtpSecure ? 'true' : 'false'
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setBackupDbStatus(`✅ ${data.message || 'Database backup successfully emailed!'}`);
+      } else {
+        setBackupDbStatus(`❌ ${data.error || 'Failed to send backup email.'}`);
+      }
+    } catch (err: any) {
+      setBackupDbStatus(`❌ Error: ${err.message || 'Network error sending backup.'}`);
+    } finally {
+      setIsBackingUpDb(false);
     }
   };
 
@@ -2338,6 +2383,46 @@ export default function OwnerPortal({
                 {testEmailStatus && (
                   <div className="text-[11px] p-2.5 rounded-lg bg-stone-50 border border-stone-200 font-medium">
                     {testEmailStatus}
+                  </div>
+                )}
+              </div>
+
+              {/* Cloud Database Backup & Disaster Recovery */}
+              <div className="pt-3.5 border-t border-stone-200 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <span className="text-xs font-bold text-stone-900 block">
+                        Disaster Recovery: Email Complete Database Backup
+                      </span>
+                      <p className="text-[10.5px] text-stone-500">
+                        Sends your full <code>counter.sqlite</code> database file directly to your Gmail as an attachment.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleEmailDbBackup}
+                    disabled={isBackingUpDb}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition whitespace-nowrap disabled:opacity-50"
+                  >
+                    {isBackingUpDb ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Sending Backup...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Email DB Backup Now</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {backupDbStatus && (
+                  <div className="text-[11px] p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 font-medium">
+                    {backupDbStatus}
                   </div>
                 )}
               </div>

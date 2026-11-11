@@ -31,3 +31,8 @@ yarn-error.log*
 # Cloudflare tunnel binary
 cloudflared.exe
 
+# Local Backups
+backups/
+*.zip
+
+

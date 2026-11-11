@@ -3,6 +3,8 @@ import { getDatabase } from '@/lib/db';
 import { formatRupees } from '@/lib/utils';
 import { Sale } from '@/lib/types';
 import nodemailer from 'nodemailer';
+import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 
 export async function POST(req: NextRequest) {
   try {
@@ -98,6 +100,64 @@ export async function POST(req: NextRequest) {
       });
 
       return NextResponse.json({ ok: true, message: `Test email successfully sent to ${testRecipient}!` });
+    }
+
+    // ACTION: backup_db (Email SQLite Database to Owner)
+    if (action === 'backup_db') {
+      const recipient = String(body.to || smtpUser || '').trim();
+      if (!recipient) {
+        return NextResponse.json({ error: 'Please enter a recipient email address.' }, { status: 400 });
+      }
+      if (!smtpUser || !smtpPass) {
+        return NextResponse.json({
+          error: 'SMTP credentials missing. Please configure your Gmail credentials first in Owner Portal.'
+        }, { status: 400 });
+      }
+
+      const dbFilePath = join(process.cwd(), 'counter.sqlite');
+      if (!existsSync(dbFilePath)) {
+        return NextResponse.json({ error: 'Database file counter.sqlite not found.' }, { status: 404 });
+      }
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const transporter = getTransporter();
+
+      await transporter.sendMail({
+        from: `"${smtpFromName}" <${smtpUser}>`,
+        to: recipient,
+        subject: `EATmi POS - Database Backup (${todayStr})`,
+        text: `Attached is your complete automated POS database backup for ${storeName} generated on ${new Date().toLocaleString('en-LK')}. Keep this file safe.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e7e5e4; border-radius: 16px; background-color: #fafaf9;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h2 style="color: #d97706; margin: 0; font-size: 20px; text-transform: uppercase;">${storeName}</h2>
+              <p style="color: #78716c; font-size: 12px; margin: 4px 0 0 0;">Automated System Backup</p>
+            </div>
+            <div style="background-color: #ffffff; padding: 20px; border-radius: 12px; border: 1px solid #e7e5e4;">
+              <h3 style="color: #1e3a8a; margin-top: 0; font-size: 16px;">💾 Full Database Backup Attached</h3>
+              <p style="color: #44403c; font-size: 13px; line-height: 1.5;">
+                Attached to this email is your complete POS SQLite database (<code>eatmi-backup-${todayStr}.sqlite</code>).
+              </p>
+              <ul style="color: #44403c; font-size: 12px; line-height: 1.6;">
+                <li>All historical sales & invoices</li>
+                <li>All customers and loyalty reward points</li>
+                <li>All products, categories, and stock numbers</li>
+              </ul>
+              <p style="color: #166534; font-size: 12px; font-weight: bold; margin-top: 15px; padding: 10px; background-color: #f0fdf4; border-radius: 8px;">
+                🛡️ Even if the shop cashier PC breaks down or fails, you can restore your entire POS system in seconds using this attached file!
+              </p>
+            </div>
+          </div>
+        `,
+        attachments: [
+          {
+            filename: `eatmi-backup-${todayStr}.sqlite`,
+            path: dbFilePath
+          }
+        ]
+      });
+
+      return NextResponse.json({ ok: true, message: `Database backup file successfully emailed to ${recipient}!` });
     }
 
     // Standard Sale Receipt Email
