@@ -893,6 +893,19 @@ export default function OwnerPortal({
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => {
+                              setEditingProduct(null);
+                              setSelectedProductCategoryFilter(cat.id);
+                              setProductModalOpen(true);
+                              playTapSound(audioEnabled);
+                            }}
+                            className="flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 px-2.5 py-1 rounded-lg transition"
+                            title={`Add new item directly to ${cat.name}`}
+                          >
+                            <Plus className="w-3 h-3 text-amber-700" />
+                            <span>Add Item</span>
+                          </button>
+                          <button
+                            onClick={() => {
                               setEditingCategory(cat);
                               setCategoryModalOpen(true);
                               playTapSound(audioEnabled);

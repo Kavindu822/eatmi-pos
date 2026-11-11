@@ -37,32 +37,46 @@ export default function ProductModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const prevOpenRef = React.useRef(false);
+
   useEffect(() => {
-    if (product) {
-      setName(product.name || '');
-      setSku(product.sku || '');
-      setCategoryId(product.category_id || categories[0]?.id || '');
-      setPriceRupees(centsToRupees(product.price));
-      setCostRupees(product.cost ? centsToRupees(product.cost) : 0);
-      setStock(product.stock ?? 0);
-      setImage(product.image || '');
-      setBadge(product.badge || '');
-      setDietary(product.dietary || '');
-      setDescription(product.description || '');
-    } else {
-      setName('');
-      setSku(`SKU-${Math.floor(1000 + Math.random() * 9000)}`);
-      setCategoryId(defaultCategoryId || categories[0]?.id || '');
-      setPriceRupees(450);
-      setCostRupees(220);
-      setStock(24);
-      setImage('');
-      setBadge('');
-      setDietary('Vegetarian');
-      setDescription('');
+    // ONLY initialize form when modal transitions from closed to open, or when editing target changes.
+    // Crucial: NEVER reset fields while the user is actively typing!
+    if (isOpen && !prevOpenRef.current) {
+      if (product) {
+        setName(product.name || '');
+        setSku(product.sku || '');
+        setCategoryId(product.category_id || defaultCategoryId || categories[0]?.id || '');
+        setPriceRupees(centsToRupees(product.price));
+        setCostRupees(product.cost ? centsToRupees(product.cost) : 0);
+        setStock(product.stock ?? 0);
+        setImage(product.image || '');
+        setBadge(product.badge || '');
+        setDietary(product.dietary || '');
+        setDescription(product.description || '');
+      } else {
+        setName('');
+        setSku(`SKU-${Math.floor(1000 + Math.random() * 9000)}`);
+        setCategoryId(defaultCategoryId || categories[0]?.id || '');
+        setPriceRupees(450);
+        setCostRupees(220);
+        setStock(24);
+        setImage('');
+        setBadge('');
+        setDietary('Vegetarian');
+        setDescription('');
+      }
+      setError('');
     }
-    setError('');
-  }, [product, defaultCategoryId, categories, isOpen]);
+    prevOpenRef.current = isOpen;
+  }, [product, defaultCategoryId, isOpen]);
+
+  // Ensure categoryId is populated if it was initially empty and categories load
+  useEffect(() => {
+    if (isOpen && !categoryId && categories.length > 0) {
+      setCategoryId(defaultCategoryId || categories[0].id);
+    }
+  }, [isOpen, categoryId, categories, defaultCategoryId]);
 
   if (!isOpen) return null;
 
