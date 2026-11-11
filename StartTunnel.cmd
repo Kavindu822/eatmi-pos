@@ -21,5 +21,5 @@ echo   It starts with: https://...trycloudflare.com
 echo ========================================================
 echo.
 
-cloudflared.exe tunnel --url http://127.0.0.1:8787 --http-host-header localhost:8787
+cloudflared.exe tunnel --url http://127.0.0.1:8787 --http-host-header localhost:8787 --protocol http2
 pause
