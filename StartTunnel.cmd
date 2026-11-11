@@ -3,33 +3,23 @@ cd /d "%~dp0"
 title EATmi POS - Remote Supervisor Cloudflare Tunnel
 
 echo ========================================================
-echo   EATmi Bakery & Cafe - Remote Supervision Tunnel
+echo   EATmi Bakery and Cafe - Remote Supervision Tunnel
 echo ========================================================
+echo.
+echo Connecting to Cloudflare Tunnel...
+echo Please wait 5 seconds for your supervisor link...
 echo.
 
 if not exist cloudflared.exe (
-    echo [Setup] Downloading Cloudflare Tunnel (One-time download)...
+    echo Downloading cloudflared...
     curl.exe -L -o cloudflared.exe "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-    if not exist cloudflared.exe (
-        echo [Error] Download failed. Please check your internet connection.
-        pause
-        exit /b 1
-    )
-    echo [Setup] Download complete!
-    echo.
 )
 
-echo --------------------------------------------------------
-echo  1. Make sure Start.cmd is running on this Cashier PC
-echo  2. Look below for your free public supervisor link:
-echo     It looks like: https://xxxx-xxxx-xxxx.trycloudflare.com
-echo  3. Copy that link and open it on your phone or laptop!
-echo --------------------------------------------------------
+echo ========================================================
+echo   Look below for your supervisor link:
+echo   It starts with: https://...trycloudflare.com
+echo ========================================================
 echo.
 
-.\cloudflared.exe tunnel --url http://127.0.0.1:8787
-if errorlevel 1 (
-    echo.
-    echo Cloudflare tunnel stopped or encountered an error.
-)
+cloudflared.exe tunnel --url http://127.0.0.1:8787
 pause
