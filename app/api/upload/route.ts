@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { getTursoClient } from '@/lib/turso';
 
 export async function POST(req: NextRequest) {
   try {
     const uploadDir = join(process.cwd(), 'public', 'uploads');
-    await mkdir(uploadDir, { recursive: true });
+    try {
+      await mkdir(uploadDir, { recursive: true });
+    } catch {}
 
     const contentType = req.headers.get('content-type') || '';
 
@@ -31,7 +34,23 @@ export async function POST(req: NextRequest) {
       const filename = `img-${Date.now()}-${randomUUID().slice(0, 8)}.${ext}`;
       const uploadPath = join(uploadDir, filename);
 
-      await writeFile(uploadPath, buffer);
+      try {
+        await writeFile(uploadPath, buffer);
+      } catch (err) {
+        // Read-only filesystem on serverless Vercel - handled gracefully
+      }
+
+      // Sync to Turso Cloud Media Table
+      try {
+        const mime = ext === 'jpg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : ext === 'svg' ? 'image/svg+xml' : 'image/png';
+        const turso = getTursoClient();
+        await turso.execute({
+          sql: 'INSERT OR REPLACE INTO media(filename, data, mime_type, updated_at) VALUES(?, ?, ?, ?)',
+          args: [filename, matches[2], mime, new Date().toISOString()]
+        });
+      } catch (cloudErr) {
+        console.error('Failed to sync media to Turso:', cloudErr);
+      }
 
       return NextResponse.json({
         ok: true,
@@ -59,7 +78,30 @@ export async function POST(req: NextRequest) {
     const filename = `item-${Date.now()}-${randomUUID().slice(0, 8)}.${safeExt}`;
     const uploadPath = join(uploadDir, filename);
 
-    await writeFile(uploadPath, buffer);
+    try {
+      await writeFile(uploadPath, buffer);
+    } catch (err) {
+      // Read-only filesystem on serverless Vercel
+    }
+
+    // Sync to Turso Cloud Media Table
+    try {
+      const mime =
+        safeExt === 'jpg' || safeExt === 'jpeg'
+          ? 'image/jpeg'
+          : safeExt === 'webp'
+          ? 'image/webp'
+          : safeExt === 'svg'
+          ? 'image/svg+xml'
+          : 'image/png';
+      const turso = getTursoClient();
+      await turso.execute({
+        sql: 'INSERT OR REPLACE INTO media(filename, data, mime_type, updated_at) VALUES(?, ?, ?, ?)',
+        args: [filename, buffer.toString('base64'), mime, new Date().toISOString()]
+      });
+    } catch (cloudErr) {
+      console.error('Failed to sync media to Turso:', cloudErr);
+    }
 
     return NextResponse.json({
       ok: true,
@@ -67,7 +109,7 @@ export async function POST(req: NextRequest) {
       name: file.name
     });
   } catch (error: any) {
-    console.error('File upload error:', error);
-    return NextResponse.json({ error: error?.message || 'Failed to upload image' }, { status: 500 });
+    console.error('Upload Error:', error);
+    return NextResponse.json({ error: error?.message || 'Failed to process file' }, { status: 500 });
   }
 }

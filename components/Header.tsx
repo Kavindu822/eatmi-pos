@@ -1,7 +1,15 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Store, ShieldCheck, ChefHat, Volume2, VolumeX, Wifi, Clock, UserCheck } from 'lucide-react';
+import { Store, ShieldCheck, ChefHat, Volume2, VolumeX, Wifi, WifiOff, RefreshCw, Clock, Cloud } from 'lucide-react';
+
+interface SyncStatus {
+  isOnline: boolean;
+  isSyncing: boolean;
+  pendingCount: number;
+  isCloud: boolean;
+  lastSync?: string;
+}
 
 interface HeaderProps {
   activeTab: 'register' | 'owner' | 'kds';
@@ -11,6 +19,8 @@ interface HeaderProps {
   onOpenOwnerPortal: () => void;
   isOwnerUnlocked: boolean;
   onLockOwner: () => void;
+  syncStatus?: SyncStatus;
+  onTriggerSync?: () => void;
 }
 
 export default function Header({
@@ -20,7 +30,9 @@ export default function Header({
   setAudioEnabled,
   onOpenOwnerPortal,
   isOwnerUnlocked,
-  onLockOwner
+  onLockOwner,
+  syncStatus = { isOnline: true, isSyncing: false, pendingCount: 0, isCloud: false },
+  onTriggerSync
 }: HeaderProps) {
   const [time, setTime] = useState('');
 
@@ -56,15 +68,53 @@ export default function Header({
             </div>
           </div>
 
-          {/* Online Live Badge */}
-          <div className="hidden sm:flex items-center gap-2 pl-3 ml-2 border-l border-stone-700/60">
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-            <span className="text-xs font-medium text-emerald-400 flex items-center gap-1">
-              <Wifi className="w-3.5 h-3.5" /> Full Online
-            </span>
+          {/* Dynamic Sync & Network Status Badge */}
+          <div className="flex items-center pl-2 md:pl-3 border-l border-stone-700/60">
+            {syncStatus.isCloud ? (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-xs font-medium">
+                <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Turso Cloud 24/7</span>
+                <span className="sm:hidden">Cloud</span>
+              </div>
+            ) : syncStatus.isSyncing ? (
+              <button
+                onClick={onTriggerSync}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-500/30 text-amber-300 text-xs font-medium animate-pulse"
+                title="Synchronizing local SQLite with Turso cloud..."
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+                <span>Syncing...</span>
+              </button>
+            ) : !syncStatus.isOnline || syncStatus.pendingCount > 0 ? (
+              <button
+                onClick={onTriggerSync}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700/80 border border-stone-600/70 text-stone-300 text-xs font-medium transition"
+                title={syncStatus.pendingCount > 0 ? `${syncStatus.pendingCount} offline sales waiting to sync. Click to retry sync.` : 'Working offline. Click to connect.'}
+              >
+                <WifiOff className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">
+                  {syncStatus.pendingCount > 0 ? `Offline (${syncStatus.pendingCount} pending)` : 'Offline Mode'}
+                </span>
+                <span className="sm:hidden">
+                  {syncStatus.pendingCount > 0 ? `${syncStatus.pendingCount} pend` : 'Offline'}
+                </span>
+                <RefreshCw className="w-3 h-3 text-stone-400 ml-0.5" />
+              </button>
+            ) : (
+              <button
+                onClick={onTriggerSync}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-500/30 text-emerald-300 text-xs font-medium transition group"
+                title="Local SQLite & Turso Cloud 100% synchronized. Click to force check."
+              >
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Cloud Synced</span>
+                <RefreshCw className="w-3 h-3 text-emerald-500/60 group-hover:rotate-180 transition-transform duration-500 ml-0.5" />
+              </button>
+            )}
           </div>
         </div>
 

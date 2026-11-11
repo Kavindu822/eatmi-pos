@@ -5,7 +5,7 @@
   "description": "A high-speed, zero-dependency Point-of-Sale (POS) and Kitchen Order Display (KDS) system crafted for bakeries, cafes, and food shops. Supports Sri Lankan Rupees (LKR / Rs.), real-time kitchen display tickets, customer loyalty points, stock replenishment, 80mm ESC/POS thermal receipt printing, and daily sales Z-reports.",
   "scripts": {
     "dev": "next dev -p 8787",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start -p 8787",
     "lint": "next lint"
   },
@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "@types/nodemailer": "^8.0.2",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",

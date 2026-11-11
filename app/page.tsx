@@ -39,6 +39,20 @@ export default function PosApp() {
   const [activeReceiptSale, setActiveReceiptSale] = useState<Sale | null>(null);
   const [activeCustomerPoints, setActiveCustomerPoints] = useState<number | undefined>(undefined);
 
+  // Cloud & Local Sync Status
+  const [syncStatus, setSyncStatus] = useState<{
+    isOnline: boolean;
+    isSyncing: boolean;
+    pendingCount: number;
+    isCloud: boolean;
+    lastSync?: string;
+  }>({
+    isOnline: true,
+    isSyncing: false,
+    pendingCount: 0,
+    isCloud: false
+  });
+
   // Load POS Data
   const fetchData = useCallback(async () => {
     try {
@@ -51,6 +65,9 @@ export default function PosApp() {
         setSales(data.sales || []);
         setSettings(data.settings || {});
         if (data.summary) setSummary(data.summary);
+        if (data.cloudMode !== undefined) {
+          setSyncStatus(prev => ({ ...prev, isCloud: Boolean(data.cloudMode) }));
+        }
       }
     } catch (err) {
       console.error('Failed to load POS data:', err);
@@ -59,12 +76,66 @@ export default function PosApp() {
     }
   }, []);
 
+  // Bi-directional Turso Cloud Sync
+  const triggerSync = useCallback(async () => {
+    try {
+      setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+      const res = await fetch('/api/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.isCloud) {
+        setSyncStatus({ isOnline: true, isSyncing: false, pendingCount: 0, isCloud: true });
+      } else if (data.ok) {
+        setSyncStatus({
+          isOnline: true,
+          isSyncing: false,
+          pendingCount: data.pendingCount || 0,
+          isCloud: false,
+          lastSync: data.lastSyncTime
+        });
+        // If categories or products were synced from owner, refresh
+        if (data.productsCount || data.categoriesCount) {
+          fetchData();
+        }
+      } else {
+        setSyncStatus(prev => ({
+          ...prev,
+          isOnline: false,
+          isSyncing: false,
+          pendingCount: data.pendingCount ?? prev.pendingCount
+        }));
+      }
+    } catch (err) {
+      setSyncStatus(prev => ({ ...prev, isOnline: false, isSyncing: false }));
+    }
+  }, [fetchData]);
+
   useEffect(() => {
     fetchData();
+    triggerSync();
+
+    // Listen to browser network changes
+    const handleOnline = () => {
+      setSyncStatus(prev => ({ ...prev, isOnline: true }));
+      triggerSync();
+    };
+    const handleOffline = () => {
+      setSyncStatus(prev => ({ ...prev, isOnline: false }));
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Periodic 20s Cloud Sync Timer
+    const syncInterval = setInterval(() => {
+      if (navigator.onLine) {
+        triggerSync();
+      }
+    }, 20000);
+
     // Safety timer: Ensure splash screen dismisses even on slow mobile networks
     const safetyTimer = setTimeout(() => {
       setLoading(false);
-    }, 3500);
+    }, 2500);
 
     // Check saved audio preference
     if (typeof window !== 'undefined') {
@@ -73,8 +144,13 @@ export default function PosApp() {
       const savedOwner = sessionStorage.getItem('pos_owner_unlocked');
       if (savedOwner === 'true') setIsOwnerUnlocked(true);
     }
-    return () => clearTimeout(safetyTimer);
-  }, [fetchData]);
+    return () => {
+      clearTimeout(safetyTimer);
+      clearInterval(syncInterval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [fetchData, triggerSync]);
 
   // Live Background Sync between Cashier PC and Remote Supervisor
   useEffect(() => {
@@ -137,6 +213,10 @@ export default function PosApp() {
     setActiveReceiptSale(sale);
     setActiveCustomerPoints(updatedCustomer?.points);
     setReceiptModalOpen(true);
+    // Background cloud sync sale immediately
+    setTimeout(() => {
+      triggerSync();
+    }, 500);
   };
 
   // Update order status in KDS
@@ -178,6 +258,8 @@ export default function PosApp() {
           onOpenOwnerPortal={handleOpenOwnerPortal}
           isOwnerUnlocked={isOwnerUnlocked}
           onLockOwner={handleLockOwner}
+          syncStatus={syncStatus}
+          onTriggerSync={triggerSync}
         />
 
         <main className="flex-1 flex flex-col">

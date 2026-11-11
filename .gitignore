@@ -35,4 +35,8 @@ cloudflared.exe
 backups/
 *.zip
 
+# Temporary test files & local secrets
+counter_temp_test.sqlite
+turso database secret token.txt
+
 

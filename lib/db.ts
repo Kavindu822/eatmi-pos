@@ -106,12 +106,14 @@ export function getDatabase(): DatabaseSync {
       notes TEXT DEFAULT '',
       status TEXT DEFAULT 'completed',
       cashier TEXT DEFAULT 'Worker 1',
+      synced INTEGER DEFAULT 0,
       FOREIGN KEY (customer_id) REFERENCES customers(id)
     );
     CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created);
   `);
 
   ensureColumn('sales', 'cashier', "TEXT DEFAULT 'Worker 1'");
+  ensureColumn('sales', 'synced', "INTEGER DEFAULT 0");
 
   // 5. Initialize Settings Table
   _db.exec(`

@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
+import path from 'node:path';
+
 const nextConfig = {
   reactStrictMode: false,
+  outputFileTracingRoot: path.resolve('.'),
   allowedDevOrigins: [
     '*.trycloudflare.com',
     'trycloudflare.com',
