@@ -70,14 +70,24 @@ export default function PosApp() {
     }
   }, [fetchData]);
 
-  // Live Auto-Refresh for Kitchen KDS screen (every 3 seconds)
+  // Live Background Sync between Cashier PC and Remote Supervisor
   useEffect(() => {
-    if (activeTab === 'kds') {
-      const timer = setInterval(() => {
-        fetchData();
-      }, 3000);
-      return () => clearInterval(timer);
-    }
+    // 3 seconds on KDS for kitchen tickets, 8 seconds on Register/Owner to sync images, stock, prices & sales
+    const intervalMs = activeTab === 'kds' ? 3000 : 8000;
+    const timer = setInterval(() => {
+      fetchData();
+    }, intervalMs);
+
+    // Sync immediately whenever the cashier or supervisor focuses the window
+    const onFocus = () => {
+      fetchData();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [activeTab, fetchData]);
 
   // Handle Audio Toggle
