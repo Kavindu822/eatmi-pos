@@ -49,3 +49,4 @@ elseif ($Action -eq 'status') {
     $isEnabled = Test-Path $startupShortcut
     Write-Host "Auto-Start Enabled: $isEnabled"
 }
+
