@@ -269,6 +269,7 @@ export default function OwnerPortal({
       if (data.ok) {
         setRecoveryMessage('Recovery credentials saved successfully!');
         await onRefreshData();
+        fetch('/api/sync', { method: 'POST' }).catch(() => {});
       } else {
         setRecoveryMessage(data.error || 'Failed to save recovery credentials');
       }
@@ -300,6 +301,7 @@ export default function OwnerPortal({
       if (data.ok) {
         setEmailSettingsMessage('✅ Email & SMTP configuration saved successfully!');
         await onRefreshData();
+        fetch('/api/sync', { method: 'POST' }).catch(() => {});
       } else {
         setEmailSettingsMessage('❌ ' + (data.error || 'Failed to save email settings'));
       }
@@ -425,6 +427,7 @@ export default function OwnerPortal({
       if (data.ok) {
         setReceiptSavedMessage('Receipt and printer settings successfully saved!');
         await onRefreshData();
+        fetch('/api/sync', { method: 'POST' }).catch(() => {});
         setTimeout(() => setReceiptSavedMessage(''), 4000);
       } else {
         setReceiptSavedMessage(data.error || 'Failed to save settings');
@@ -456,6 +459,7 @@ export default function OwnerPortal({
         setLoyaltyRateInput(String(targetRate));
         setLoyaltyRateMessage(`Loyalty rule updated: Spend Rs. ${targetRate} = 1 reward point!`);
         await onRefreshData();
+        fetch('/api/sync', { method: 'POST' }).catch(() => {});
         setTimeout(() => setLoyaltyRateMessage(''), 4000);
       } else {
         setLoyaltyRateMessage(data.error || 'Failed to update loyalty rate');

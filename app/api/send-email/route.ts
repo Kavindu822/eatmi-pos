@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db';
 import { formatRupees } from '@/lib/utils';
 import { Sale } from '@/lib/types';
 import nodemailer from 'nodemailer';
@@ -11,13 +10,23 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { sale, to, customerPointsBalance, action } = body;
 
-    const db = getDatabase();
-
-    // Fetch store and SMTP settings from SQLite
-    const settingsRows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+    const isCloud = process.env.VERCEL === '1';
     const settings: Record<string, string> = {};
-    for (const row of settingsRows) {
-      settings[row.key] = row.value;
+
+    if (isCloud) {
+      const { getTursoClient } = await import('@/lib/turso');
+      const turso = getTursoClient();
+      const res = await turso.execute('SELECT key, value FROM settings');
+      for (const r of res.rows) {
+        settings[String(r.key)] = String(r.value);
+      }
+    } else {
+      const { getDatabase } = await import('@/lib/db');
+      const db = getDatabase();
+      const settingsRows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+      for (const row of settingsRows) {
+        settings[row.key] = row.value;
+      }
     }
 
     const smtpHost = body.smtp_host || settings.smtp_host || 'smtp.gmail.com';

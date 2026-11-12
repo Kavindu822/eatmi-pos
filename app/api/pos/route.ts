@@ -915,17 +915,25 @@ export async function POST(req: NextRequest) {
       if (!newPin || newPin.length < 4) {
         return NextResponse.json({ error: 'PIN must be at least 4 digits.' }, { status: 400 });
       }
+      const now = new Date().toISOString();
 
       if (isCloud) {
         const turso = getTursoClient();
         await turso.execute({
-          sql: "INSERT OR REPLACE INTO settings(key, value) VALUES('owner_pin', ?)",
-          args: [newPin]
+          sql: "INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('owner_pin', ?, ?)",
+          args: [newPin, now]
         });
       } else {
         const { getDatabase } = await import('@/lib/db');
         const db = getDatabase();
-        db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('owner_pin', ?)").run(newPin);
+        db.prepare("INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('owner_pin', ?, ?)").run(newPin, now);
+        try {
+          const turso = getTursoClient();
+          await turso.execute({
+            sql: "INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('owner_pin', ?, ?)",
+            args: [newPin, now]
+          });
+        } catch (e) {}
       }
 
       return NextResponse.json({ ok: true, message: 'Owner PIN updated successfully.' });
@@ -978,16 +986,24 @@ export async function POST(req: NextRequest) {
         }, { status: 401 });
       }
 
+      const now = new Date().toISOString();
       if (isCloud) {
         const turso = getTursoClient();
         await turso.execute({
-          sql: "INSERT OR REPLACE INTO settings(key, value) VALUES('owner_pin', ?)",
-          args: [newPin]
+          sql: "INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('owner_pin', ?, ?)",
+          args: [newPin, now]
         });
       } else {
         const { getDatabase } = await import('@/lib/db');
         const db = getDatabase();
-        db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('owner_pin', ?)").run(newPin);
+        db.prepare("INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('owner_pin', ?, ?)").run(newPin, now);
+        try {
+          const turso = getTursoClient();
+          await turso.execute({
+            sql: "INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('owner_pin', ?, ?)",
+            args: [newPin, now]
+          });
+        } catch (e) {}
       }
 
       return NextResponse.json({ ok: true, verified: true, message: 'Owner PIN successfully reset!' });
@@ -999,30 +1015,46 @@ export async function POST(req: NextRequest) {
     if (b.action === 'update_recovery_settings') {
       const masterKey = String(b.master_recovery_key || '').trim().toUpperCase();
       const phone = String(b.owner_recovery_phone || '').trim();
+      const now = new Date().toISOString();
 
       if (isCloud) {
         const turso = getTursoClient();
         if (masterKey) {
           await turso.execute({
-            sql: "INSERT OR REPLACE INTO settings(key, value) VALUES('master_recovery_key', ?)",
-            args: [masterKey]
+            sql: "INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('master_recovery_key', ?, ?)",
+            args: [masterKey, now]
           });
         }
         if (phone !== undefined) {
           await turso.execute({
-            sql: "INSERT OR REPLACE INTO settings(key, value) VALUES('owner_recovery_phone', ?)",
-            args: [phone]
+            sql: "INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('owner_recovery_phone', ?, ?)",
+            args: [phone, now]
           });
         }
       } else {
         const { getDatabase } = await import('@/lib/db');
         const db = getDatabase();
         if (masterKey) {
-          db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('master_recovery_key', ?)").run(masterKey);
+          db.prepare("INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('master_recovery_key', ?, ?)").run(masterKey, now);
         }
         if (phone !== undefined) {
-          db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('owner_recovery_phone', ?)").run(phone);
+          db.prepare("INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('owner_recovery_phone', ?, ?)").run(phone, now);
         }
+        try {
+          const turso = getTursoClient();
+          if (masterKey) {
+            await turso.execute({
+              sql: "INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('master_recovery_key', ?, ?)",
+              args: [masterKey, now]
+            });
+          }
+          if (phone !== undefined) {
+            await turso.execute({
+              sql: "INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('owner_recovery_phone', ?, ?)",
+              args: [phone, now]
+            });
+          }
+        } catch (e) {}
       }
 
       return NextResponse.json({ ok: true, message: 'Emergency recovery settings updated successfully.' });
@@ -1057,14 +1089,16 @@ export async function POST(req: NextRequest) {
         'smtp_secure'
       ];
 
+      const now = new Date().toISOString();
+
       if (isCloud) {
         const turso = getTursoClient();
         const batch: any[] = [];
         for (const key of allowedKeys) {
           if (b[key] !== undefined) {
             batch.push({
-              sql: 'INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)',
-              args: [key, String(b[key])]
+              sql: 'INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)',
+              args: [key, String(b[key]), now]
             });
           }
         }
@@ -1076,8 +1110,27 @@ export async function POST(req: NextRequest) {
         const db = getDatabase();
         for (const key of allowedKeys) {
           if (b[key] !== undefined) {
-            db.prepare('INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)').run(key, String(b[key]));
+            db.prepare('INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)').run(key, String(b[key]), now);
           }
+        }
+
+        // Also push immediately to Turso Cloud so Vercel is in sync instantly
+        try {
+          const turso = getTursoClient();
+          const batch: any[] = [];
+          for (const key of allowedKeys) {
+            if (b[key] !== undefined) {
+              batch.push({
+                sql: 'INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)',
+                args: [key, String(b[key]), now]
+              });
+            }
+          }
+          if (batch.length > 0) {
+            await turso.batch(batch, 'write');
+          }
+        } catch (cloudErr) {
+          console.warn('Could not push settings to Turso immediately (offline):', cloudErr);
         }
       }
 
@@ -1089,17 +1142,25 @@ export async function POST(req: NextRequest) {
     // =============================================================
     if (b.action === 'update_loyalty_rate') {
       const rate = Math.max(1, Math.floor(Number(b.rate) || 300));
+      const now = new Date().toISOString();
 
       if (isCloud) {
         const turso = getTursoClient();
         await turso.execute({
-          sql: "INSERT OR REPLACE INTO settings(key, value) VALUES('loyalty_rate_rupees', ?)",
-          args: [String(rate)]
+          sql: "INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('loyalty_rate_rupees', ?, ?)",
+          args: [String(rate), now]
         });
       } else {
         const { getDatabase } = await import('@/lib/db');
         const db = getDatabase();
-        db.prepare("INSERT OR REPLACE INTO settings(key, value) VALUES('loyalty_rate_rupees', ?)").run(String(rate));
+        db.prepare("INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('loyalty_rate_rupees', ?, ?)").run(String(rate), now);
+        try {
+          const turso = getTursoClient();
+          await turso.execute({
+            sql: "INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES('loyalty_rate_rupees', ?, ?)",
+            args: [String(rate), now]
+          });
+        } catch (e) {}
       }
 
       return NextResponse.json({ ok: true, rate, message: `Loyalty rule updated: Every Rs. ${rate} spent earns 1 reward point.` });

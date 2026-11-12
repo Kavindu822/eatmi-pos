@@ -128,14 +128,16 @@ export function getDatabase(): DatabaseSync {
   _db.exec(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY NOT NULL,
-      value TEXT NOT NULL
+      value TEXT NOT NULL,
+      updated_at TEXT DEFAULT ''
     );
   `);
+  ensureColumn('settings', 'updated_at', "TEXT DEFAULT ''");
 
   function ensureSetting(key: string, defaultValue: string) {
     const exists = _db!.prepare("SELECT value FROM settings WHERE key=?").get(key);
     if (!exists) {
-      _db!.prepare("INSERT INTO settings(key, value) VALUES(?, ?)").run(key, defaultValue);
+      _db!.prepare("INSERT INTO settings(key, value, updated_at) VALUES(?, ?, ?)").run(key, defaultValue, new Date().toISOString());
     }
   }
 

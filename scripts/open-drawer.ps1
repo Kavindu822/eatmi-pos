@@ -110,3 +110,4 @@ if ($success) {
     Write-Error "FAILED: Could not open cash drawer on any printer."
     exit 1
 }
+

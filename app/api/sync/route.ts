@@ -294,16 +294,74 @@ export async function POST() {
     } catch (e) {}
 
     // -------------------------------------------------------------
-    // STEP 7: SETTINGS SYNC
+    // STEP 7: BIDIRECTIONAL SETTINGS SYNC
     // -------------------------------------------------------------
-    const setRes = await turso.execute('SELECT key, value FROM settings');
-    for (const st of setRes.rows) {
-      try {
-        db.prepare('INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)').run(
-          String(st.key),
-          String(st.value)
-        );
-      } catch (err) {}
+    try {
+      const localSettings = db.prepare('SELECT key, value, updated_at FROM settings').all() as any[];
+      const tursoSetRes = await turso.execute('SELECT key, value, updated_at FROM settings');
+      const tursoSettings = tursoSetRes.rows.map(r => ({ ...r })) as any[];
+
+      const localSetMap = new Map<string, any>();
+      for (const s of localSettings) localSetMap.set(String(s.key), s);
+
+      const tursoSetMap = new Map<string, any>();
+      for (const s of tursoSettings) tursoSetMap.set(String(s.key), s);
+
+      const allKeys = new Set<string>([...localSetMap.keys(), ...tursoSetMap.keys()]);
+      const tursoBatch: any[] = [];
+
+      for (const key of allKeys) {
+        const local = localSetMap.get(key);
+        const remote = tursoSetMap.get(key);
+
+        const localVal = local?.value !== undefined && local?.value !== null ? String(local.value) : '';
+        const remoteVal = remote?.value !== undefined && remote?.value !== null ? String(remote.value) : '';
+        const localTime = local?.updated_at ? new Date(local.updated_at).getTime() : 0;
+        const remoteTime = remote?.updated_at ? new Date(remote.updated_at).getTime() : 0;
+
+        // 1. Non-empty vs Empty: NEVER overwrite filled settings with empty strings!
+        if (localVal && !remoteVal) {
+          tursoBatch.push({
+            sql: 'INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)',
+            args: [key, localVal, local?.updated_at || new Date().toISOString()]
+          });
+        } else if (remoteVal && !localVal) {
+          db.prepare('INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)').run(
+            key, remoteVal, remote?.updated_at || new Date().toISOString()
+          );
+        }
+        // 2. Both sides have values (or both empty), but they differ
+        else if (localVal !== remoteVal) {
+          if (localTime > remoteTime) {
+            tursoBatch.push({
+              sql: 'INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)',
+              args: [key, localVal, local?.updated_at || new Date().toISOString()]
+            });
+          } else if (remoteTime > localTime) {
+            db.prepare('INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)').run(
+              key, remoteVal, remote?.updated_at || new Date().toISOString()
+            );
+          } else {
+            // Tie-break: prefer local non-empty, otherwise remote
+            if (localVal) {
+              tursoBatch.push({
+                sql: 'INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)',
+                args: [key, localVal, new Date().toISOString()]
+              });
+            } else if (remoteVal) {
+              db.prepare('INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)').run(
+                key, remoteVal, new Date().toISOString()
+              );
+            }
+          }
+        }
+      }
+
+      if (tursoBatch.length > 0) {
+        await turso.batch(tursoBatch, 'write');
+      }
+    } catch (setErr) {
+      console.warn('Bidirectional settings sync warning:', setErr);
     }
 
     // -------------------------------------------------------------
