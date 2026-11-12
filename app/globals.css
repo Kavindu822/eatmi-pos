@@ -32,6 +32,17 @@ body {
   background: #a8a29e;
 }
 
+/* Hide Next.js Dev Indicator badge & Dev Tools button ("N" icon in bottom corner) */
+nextjs-portal,
+[data-nextjs-dev-indicator],
+[data-nextjs-toast],
+div[data-nextjs-dev-indicator-wrapper] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 /* ============================================================== */
 /* THERMAL RECEIPT PRINT STYLES - 1 SINGLE SHEET ENFORCEMENT       */
 /* Auto-Adjusts Height For Short & Long Bills (Zero Paper Waste)  */

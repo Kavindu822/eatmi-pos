@@ -5,6 +5,16 @@ import { join } from 'node:path';
 
 const execFileAsync = promisify(execFile);
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 200, headers: corsHeaders });
+}
+
 export async function GET() {
   return POST();
 }
@@ -15,7 +25,7 @@ export async function POST() {
       return NextResponse.json({
         ok: false,
         error: 'Physical cash drawer can only be opened from the shop cashier PC.'
-      });
+      }, { headers: corsHeaders });
     }
 
     const scriptPath = join(process.cwd(), 'scripts', 'open-drawer.ps1');
@@ -32,12 +42,12 @@ export async function POST() {
       ok: isSuccess,
       message: stdout.trim() || 'Cash drawer kick signal sent.',
       error: !isSuccess ? (stderr.trim() || 'Could not kick drawer') : undefined
-    });
+    }, { headers: corsHeaders });
   } catch (error: any) {
     console.error('Open drawer API error:', error);
     return NextResponse.json({
       ok: false,
       error: error.message || 'Failed to trigger drawer'
-    }, { status: 500 });
+    }, { status: 500, headers: corsHeaders });
   }
 }

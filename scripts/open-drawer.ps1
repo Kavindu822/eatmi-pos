@@ -63,14 +63,17 @@ if (-not ([System.Management.Automation.PSTypeName]'RawPrinterHelper').Type) {
     Add-Type -TypeDefinition $code
 }
 
-# Standard ESC/POS Cash Drawer Kick pulse:
-# Pin 2: ESC p 0 25 250 (0x1B, 0x70, 0x00, 0x19, 0xFA)
-# Pin 5: ESC p 1 25 250 (0x1B, 0x70, 0x01, 0x19, 0xFA)
-# DLE DC4: 0x10, 0x14, 0x01, 0x00, 0x05
+# Standard ESC/POS Cash Drawer Kick pulse combinations:
+# Pin 2 & Pin 5, Standard + High Power, DLE DC4, and BEL
 $drawerPulse = [byte[]]@(
     0x1B, 0x70, 0x00, 0x19, 0xFA,
     0x1B, 0x70, 0x01, 0x19, 0xFA,
-    0x10, 0x14, 0x01, 0x00, 0x05
+    0x1B, 0x70, 0x00, 0x32, 0xFA,
+    0x1B, 0x70, 0x01, 0x32, 0xFA,
+    0x1B, 0x70, 0x30, 0x19, 0xFA,
+    0x1B, 0x70, 0x31, 0x19, 0xFA,
+    0x10, 0x14, 0x01, 0x00, 0x05,
+    0x07
 )
 
 # List of candidate printer queues in order of priority
@@ -79,15 +82,22 @@ if ($PrinterName) {
     $candidates += $PrinterName
 }
 
-# Add default Windows printer first
+# Add default Windows printer first, plus any printer matching POS/80/Receipt/Thermal
 try {
-    $defaultPrn = (Get-CimInstance Win32_Printer | Where-Object Default -eq $True).Name
+    $allPrinters = Get-CimInstance Win32_Printer
+    $defaultPrn = ($allPrinters | Where-Object Default -eq $True).Name
     if ($defaultPrn) { $candidates += $defaultPrn }
+    foreach ($p in $allPrinters) {
+        if ($p.Name -match 'POS|80|Receipt|Thermal|Xprinter|Epson|XP-') {
+            $candidates += $p.Name
+        }
+    }
 } catch {}
 
 $candidates += 'POS-80C (copy 1)'
 $candidates += 'POS-80C'
 $candidates += 'POS-80'
+$candidates += 'POS80'
 
 $success = $false
 $usedPrinter = ''

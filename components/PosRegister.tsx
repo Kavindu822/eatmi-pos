@@ -26,6 +26,7 @@ import confetti from 'canvas-confetti';
 import { Category, Product, Customer, CartItem, Sale } from '@/lib/types';
 import { formatRupees, formatShortRupees, calculateLoyaltyPoints } from '@/lib/utils';
 import { playTapSound, playRegisterSound } from '@/lib/sound';
+import { kickCashDrawer } from '@/lib/drawer';
 import NewCustomerModal from './NewCustomerModal';
 import ItemModifierModal from './ItemModifierModal';
 
@@ -282,9 +283,7 @@ export default function PosRegister({
       if (data.ok && data.sale) {
         // Automatically kick cash drawer for Cash sales
         if (paymentMethod === 'Cash') {
-          try {
-            fetch('/api/open-drawer', { method: 'POST' }).catch(() => {});
-          } catch {}
+          kickCashDrawer().catch(() => {});
         }
         playRegisterSound(audioEnabled);
         try {

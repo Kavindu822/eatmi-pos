@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Store, ShieldCheck, ChefHat, Volume2, VolumeX, Wifi, WifiOff, RefreshCw, Clock, Cloud } from 'lucide-react';
+import { Store, ShieldCheck, ChefHat, Volume2, VolumeX, Wifi, WifiOff, RefreshCw, Clock, Cloud, Banknote } from 'lucide-react';
+import { kickCashDrawer } from '@/lib/drawer';
 
 interface SyncStatus {
   isOnline: boolean;
@@ -35,6 +36,7 @@ export default function Header({
   onTriggerSync
 }: HeaderProps) {
   const [time, setTime] = useState('');
+  const [drawerKicking, setDrawerKicking] = useState(false);
 
   useEffect(() => {
     const updateTime = () => {
@@ -163,8 +165,26 @@ export default function Header({
           </button>
         </nav>
 
-        {/* Right Tools: Time, Sound Chimes, Lock */}
-        <div className="flex items-center gap-3">
+        {/* Right Tools: Kick Drawer, Time, Sound Chimes, Lock */}
+        <div className="flex items-center gap-2.5">
+          {/* Quick Cash Drawer Kick Button */}
+          <button
+            onClick={async () => {
+              setDrawerKicking(true);
+              await kickCashDrawer();
+              setTimeout(() => setDrawerKicking(false), 1500);
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition ${
+              drawerKicking
+                ? 'bg-amber-600 text-white border-amber-500 scale-95'
+                : 'bg-stone-800 hover:bg-amber-950/60 text-amber-300 hover:text-amber-200 border-amber-500/40 shadow-xs'
+            }`}
+            title="Kick open physical cash drawer on cashier desk"
+          >
+            <Banknote className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline">{drawerKicking ? 'Opened!' : 'Kick Drawer'}</span>
+          </button>
+
           <div className="hidden lg:flex items-center gap-1.5 text-xs font-mono text-stone-300 bg-stone-800/60 px-2.5 py-1 rounded-lg border border-stone-700/50">
             <Clock className="w-3.5 h-3.5 text-amber-400" />
             <span>{time || '--:--:--'}</span>

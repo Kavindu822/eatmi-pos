@@ -84,6 +84,7 @@ export function getDatabase(): DatabaseSync {
   ensureColumn('products', 'image', "TEXT DEFAULT ''");
   ensureColumn('products', 'cost', "INTEGER DEFAULT 0");
   ensureColumn('products', 'is_active', "INTEGER DEFAULT 1");
+  ensureColumn('products', 'updated_at', "TEXT DEFAULT ''");
   ensureColumn('customers', 'created_at', "TEXT DEFAULT ''");
   ensureColumn('customers', 'updated_at', "TEXT DEFAULT ''");
 

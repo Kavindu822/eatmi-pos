@@ -136,55 +136,97 @@ export async function POST() {
     const localProdMap = new Map<string, any>();
     for (const p of localProducts) localProdMap.set(String(p.id), p);
 
-    // Push local products to Turso if missing
+    // 1. Reconcile existing & push new local products to Turso
     for (const lp of localProducts) {
-      if (!tursoProdMap.has(String(lp.id))) {
+      const tp = tursoProdMap.get(String(lp.id));
+      if (!tp) {
+        // Missing in Turso: Insert
         await turso.execute({
-          sql: `INSERT OR REPLACE INTO products(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          sql: `INSERT OR REPLACE INTO products(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active, updated_at)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
             lp.id, lp.name, lp.sku, lp.category_id || '', lp.category,
             lp.price, lp.cost || 0, lp.stock || 0, lp.image || '',
             lp.badge || '', lp.dietary || '', lp.description || '',
-            lp.is_active !== undefined ? (Number(lp.is_active) ? 1 : 0) : 1
+            lp.is_active !== undefined ? (Number(lp.is_active) ? 1 : 0) : 1,
+            lp.updated_at || ''
           ]
         });
+      } else {
+        // Exists in both: compare timestamps
+        const localTime = lp.updated_at ? new Date(lp.updated_at).getTime() : 0;
+        const tursoTime = tp.updated_at ? new Date(tp.updated_at).getTime() : 0;
+
+        let target = lp;
+        let updateTurso = false;
+        let updateLocal = false;
+
+        if (tursoTime > localTime) {
+          // Cloud was modified more recently (e.g. Owner added stock or edited on Vercel)
+          target = tp;
+          updateLocal = true;
+        } else if (localTime > tursoTime) {
+          // Local register was modified more recently (e.g. Cashier sold item or restocked locally)
+          target = lp;
+          updateTurso = true;
+        } else {
+          // Both have same timestamp or no timestamp:
+          // Keep lower stock (protect cashier sales deductions from being overwritten)
+          const targetStock = Math.min(Number(lp.stock || 0), Number(tp.stock || 0));
+          if (targetStock !== Number(tp.stock)) updateTurso = true;
+          if (targetStock !== Number(lp.stock)) updateLocal = true;
+          target = { ...lp, stock: targetStock };
+        }
+
+        if (updateTurso) {
+          await turso.execute({
+            sql: `UPDATE products SET
+                    name = ?, sku = ?, category_id = ?, category = ?,
+                    price = ?, cost = ?, stock = ?, image = ?,
+                    badge = ?, dietary = ?, description = ?, is_active = ?,
+                    updated_at = ?
+                  WHERE id = ?`,
+            args: [
+              target.name, target.sku, target.category_id || '', target.category,
+              Number(target.price), Number(target.cost || 0), Number(target.stock || 0), String(target.image || ''),
+              String(target.badge || ''), String(target.dietary || ''), String(target.description || ''),
+              Number(target.is_active) ? 1 : 0, target.updated_at || '', target.id
+            ]
+          });
+        }
+
+        if (updateLocal) {
+          db.prepare(`
+            UPDATE products SET
+              name = ?, sku = ?, category_id = ?, category = ?,
+              price = ?, cost = ?, stock = ?, image = ?,
+              badge = ?, dietary = ?, description = ?, is_active = ?,
+              updated_at = ?
+            WHERE id = ?
+          `).run(
+            target.name, target.sku, target.category_id || '', target.category,
+            Number(target.price), Number(target.cost || 0), Number(target.stock || 0), String(target.image || ''),
+            String(target.badge || ''), String(target.dietary || ''), String(target.description || ''),
+            Number(target.is_active) ? 1 : 0, target.updated_at || '', target.id
+          );
+        }
       }
     }
 
-    // Pull Turso products into local SQLite
+    // 2. Pull products present on Turso but missing locally
     for (const tp of tursoProducts) {
-      db.prepare(`
-        INSERT INTO products(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active)
-        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          name=excluded.name,
-          sku=excluded.sku,
-          category_id=excluded.category_id,
-          category=excluded.category,
-          price=excluded.price,
-          cost=excluded.cost,
-          stock=excluded.stock,
-          image=excluded.image,
-          badge=excluded.badge,
-          dietary=excluded.dietary,
-          description=excluded.description,
-          is_active=excluded.is_active
-      `).run(
-        String(tp.id),
-        String(tp.name),
-        String(tp.sku),
-        String(tp.category_id || ''),
-        String(tp.category),
-        Number(tp.price),
-        Number(tp.cost || 0),
-        Number(tp.stock || 0),
-        String(tp.image || ''),
-        String(tp.badge || ''),
-        String(tp.dietary || ''),
-        String(tp.description || ''),
-        tp.is_active !== undefined ? (Number(tp.is_active) ? 1 : 0) : 1
-      );
+      if (!localProdMap.has(String(tp.id))) {
+        db.prepare(`
+          INSERT INTO products(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active, updated_at)
+          VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          String(tp.id), String(tp.name), String(tp.sku), String(tp.category_id || ''),
+          String(tp.category), Number(tp.price), Number(tp.cost || 0), Number(tp.stock || 0),
+          String(tp.image || ''), String(tp.badge || ''), String(tp.dietary || ''),
+          String(tp.description || ''), tp.is_active !== undefined ? (Number(tp.is_active) ? 1 : 0) : 1,
+          String(tp.updated_at || '')
+        );
+      }
     }
 
     // -------------------------------------------------------------

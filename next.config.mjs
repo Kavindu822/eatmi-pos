@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const nextConfig = {
   reactStrictMode: false,
+  devIndicators: false,
   outputFileTracingRoot: path.resolve('.'),
   allowedDevOrigins: [
     '*.trycloudflare.com',

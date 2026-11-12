@@ -275,15 +275,16 @@ export async function POST(req: NextRequest) {
           }
         ];
 
+        const now = new Date().toISOString();
+
         for (const [pid, qty] of requestedQty.entries()) {
           batchStatements.push({
-            sql: 'UPDATE products SET stock = stock - ? WHERE id = ?',
-            args: [qty, pid]
+            sql: 'UPDATE products SET stock = stock - ?, updated_at = ? WHERE id = ?',
+            args: [qty, now, pid]
           });
         }
 
         if (customer) {
-          const now = new Date().toISOString();
           batchStatements.push({
             sql: `UPDATE customers 
                   SET points = points - ? + ?,
@@ -418,14 +419,15 @@ export async function POST(req: NextRequest) {
           sale.status, sale.cashier
         );
 
+        const now = new Date().toISOString();
+
         for (const [pid, qty] of requestedQty.entries()) {
-          db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?').run(qty, pid);
+          db.prepare('UPDATE products SET stock = stock - ?, updated_at = ? WHERE id = ?').run(qty, now, pid);
         }
 
         let finalCustomerPoints = 0;
         let finalCustomerSpent = 0;
         let finalCustomerVisits = 0;
-        const now = new Date().toISOString();
 
         if (customer) {
           finalCustomerPoints = Math.max(0, (customer.points || 0) - redeemed + earned);
@@ -443,6 +445,17 @@ export async function POST(req: NextRequest) {
         }
 
         db.exec('COMMIT');
+
+        // Immediately replicate product stock reductions to Turso Cloud so cloud sync never restores old stock
+        for (const [pid, qty] of requestedQty.entries()) {
+          try {
+            const turso = getTursoClient();
+            await turso.execute({
+              sql: 'UPDATE products SET stock = stock - ?, updated_at = ? WHERE id = ?',
+              args: [qty, now, pid]
+            });
+          } catch (cloudErr) {}
+        }
 
         // Immediately replicate to Turso Cloud so background sync never restores old points
         if (customer) {
@@ -624,6 +637,7 @@ export async function POST(req: NextRequest) {
       const dietary = String(b.dietary || '').trim();
       const description = String(b.description || '').trim();
       const is_active = b.is_active !== undefined ? (b.is_active ? 1 : 0) : 1;
+      const now = new Date().toISOString();
 
       if (isCloud) {
         const turso = getTursoClient();
@@ -636,8 +650,8 @@ export async function POST(req: NextRequest) {
 
         await turso.execute({
           sql: `
-            INSERT INTO products(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO products(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active, updated_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               sku=excluded.sku,
@@ -650,9 +664,10 @@ export async function POST(req: NextRequest) {
               badge=excluded.badge,
               dietary=excluded.dietary,
               description=excluded.description,
-              is_active=excluded.is_active
+              is_active=excluded.is_active,
+              updated_at=excluded.updated_at
           `,
-          args: [id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active]
+          args: [id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active, now]
         });
 
         const prodRes = await turso.execute({ sql: 'SELECT * FROM products WHERE id=?', args: [id] });
@@ -668,8 +683,8 @@ export async function POST(req: NextRequest) {
       const category = targetCategory.name;
 
       db.prepare(`
-        INSERT INTO products(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active)
-        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO products(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active, updated_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           name=excluded.name,
           sku=excluded.sku,
@@ -682,16 +697,17 @@ export async function POST(req: NextRequest) {
           badge=excluded.badge,
           dietary=excluded.dietary,
           description=excluded.description,
-          is_active=excluded.is_active
-      `).run(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active);
+          is_active=excluded.is_active,
+          updated_at=excluded.updated_at
+      `).run(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active, now);
 
       // Replicate to Turso if online
       try {
         const turso = getTursoClient();
         await turso.execute({
           sql: `
-            INSERT INTO products(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO products(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active, updated_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               sku=excluded.sku,
@@ -704,9 +720,10 @@ export async function POST(req: NextRequest) {
               badge=excluded.badge,
               dietary=excluded.dietary,
               description=excluded.description,
-              is_active=excluded.is_active
+              is_active=excluded.is_active,
+              updated_at=excluded.updated_at
           `,
-          args: [id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active]
+          args: [id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active, now]
         });
       } catch (cloudErr) {}
 
@@ -750,20 +767,21 @@ export async function POST(req: NextRequest) {
     if (b.action === 'restock') {
       const id = String(b.id);
       const qty = Math.max(1, Math.floor(Number(b.qty) || 1));
+      const now = new Date().toISOString();
 
       if (isCloud) {
         const turso = getTursoClient();
-        await turso.execute({ sql: 'UPDATE products SET stock = stock + ? WHERE id = ?', args: [qty, id] });
+        await turso.execute({ sql: 'UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?', args: [qty, now, id] });
         const prodRes = await turso.execute({ sql: 'SELECT * FROM products WHERE id=?', args: [id] });
         return NextResponse.json({ ok: true, product: prodRes.rows[0] });
       }
 
       const { getDatabase } = await import('@/lib/db');
       const db = getDatabase();
-      db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?').run(qty, id);
+      db.prepare('UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?').run(qty, now, id);
       try {
         const turso = getTursoClient();
-        await turso.execute({ sql: 'UPDATE products SET stock = stock + ? WHERE id = ?', args: [qty, id] });
+        await turso.execute({ sql: 'UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?', args: [qty, now, id] });
       } catch (cloudErr) {}
       const product = db.prepare('SELECT * FROM products WHERE id=?').get(id);
       return NextResponse.json({ ok: true, product });
