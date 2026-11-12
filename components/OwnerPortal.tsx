@@ -45,6 +45,7 @@ import { generateReceiptHtml, printReceiptHtml } from '@/lib/receipt';
 import CategoryModal from './CategoryModal';
 import ProductModal from './ProductModal';
 import CustomerPointsModal from './CustomerPointsModal';
+import EditCustomerModal from './EditCustomerModal';
 import NewCustomerModal from './NewCustomerModal';
 
 interface OwnerPortalProps {
@@ -154,6 +155,8 @@ export default function OwnerPortal({
 
   const [pointsModalOpen, setPointsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [editCustomerModalOpen, setEditCustomerModalOpen] = useState(false);
+  const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [newCustomerModalOpen, setNewCustomerModalOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
 
@@ -222,6 +225,27 @@ export default function OwnerPortal({
       }
     } catch (e: any) {
       alert('Network error while deleting category');
+    }
+  };
+
+  // Delete customer
+  const handleDeleteCustomer = async (customerId: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete patron "${name}"?\n\nThis will remove their profile and loyalty points balance from both local and cloud databases.`)) return;
+    try {
+      const res = await fetch('/api/pos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_customer', id: customerId })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        await onRefreshData();
+        fetch('/api/sync', { method: 'POST' }).catch(() => {});
+      } else {
+        alert(data.error || 'Failed to delete patron');
+      }
+    } catch (e: any) {
+      alert('Network error while deleting patron');
     }
   };
 
@@ -1305,16 +1329,37 @@ export default function OwnerPortal({
                             {cust.visits}
                           </td>
                           <td className="py-2.5 px-4 text-right">
-                            <button
-                              onClick={() => {
-                                setEditingCustomer(cust);
-                                setPointsModalOpen(true);
-                                playTapSound(audioEnabled);
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold border border-stone-300 transition"
-                            >
-                              Adjust Points
-                            </button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setEditingCustomer(cust);
+                                  setPointsModalOpen(true);
+                                  playTapSound(audioEnabled);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold border border-stone-300 transition"
+                                title="Adjust Points"
+                              >
+                                Adjust Points
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCustomerToEdit(cust);
+                                  setEditCustomerModalOpen(true);
+                                  playTapSound(audioEnabled);
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-stone-200 text-stone-600 hover:text-stone-900 transition"
+                                title="Edit Patron Profile"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCustomer(cust.id, cust.name)}
+                                className="p-1.5 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600 transition"
+                                title="Delete Patron"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -2428,6 +2473,13 @@ export default function OwnerPortal({
         isOpen={pointsModalOpen}
         onClose={() => setPointsModalOpen(false)}
         customer={editingCustomer}
+        onSaved={onRefreshData}
+      />
+
+      <EditCustomerModal
+        isOpen={editCustomerModalOpen}
+        onClose={() => setEditCustomerModalOpen(false)}
+        customer={customerToEdit}
         onSaved={onRefreshData}
       />
 

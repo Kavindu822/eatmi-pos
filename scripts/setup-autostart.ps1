@@ -10,7 +10,7 @@ $desktopShortcut = Join-Path $desktopFolder 'EATmi POS.lnk'
 
 $rootPath = (Get-Item $PSScriptRoot).Parent.FullName
 $targetVbs = Join-Path $rootPath 'StartSilent.vbs'
-$iconPath = Join-Path $rootPath 'public\favicon.ico'
+$iconPath = Join-Path $rootPath 'public\app.ico'
 
 if ($Action -eq 'enable') {
     $WshShell = New-Object -ComObject WScript.Shell
@@ -32,6 +32,19 @@ if ($Action -eq 'enable') {
     $dsc.Description = 'EATmi Cloud POS Cashier Terminal'
     if (Test-Path $iconPath) { $dsc.IconLocation = $iconPath }
     $dsc.Save()
+
+    # Notify Windows Explorer to refresh desktop icon cache
+    try {
+        Add-Type -TypeDefinition @"
+        using System;
+        using System.Runtime.InteropServices;
+        public class ShellIconNotifier {
+            [DllImport("shell32.dll")]
+            public static extern void SHChangeNotify(int wEventId, int uFlags, IntPtr dwItem1, IntPtr dwItem2);
+        }
+"@
+        [ShellIconNotifier]::SHChangeNotify(0x08000000, 0x0000, [IntPtr]::Zero, [IntPtr]::Zero)
+    } catch {}
 
     Write-Host "SUCCESS: Windows Auto-Start is now ENABLED!" -ForegroundColor Green
     Write-Host "Created startup shortcut: $startupShortcut"

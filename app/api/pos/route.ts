@@ -837,6 +837,43 @@ export async function POST(req: NextRequest) {
     }
 
     // =============================================================
+    // 8b. ACTION: delete_customer
+    // =============================================================
+    if (b.action === 'delete_customer') {
+      const id = String(b.id || '');
+      if (!id) {
+        return NextResponse.json({ error: 'Customer ID is required.' }, { status: 400 });
+      }
+      const now = new Date().toISOString();
+
+      if (isCloud) {
+        const turso = getTursoClient();
+        await turso.execute({ sql: 'DELETE FROM customers WHERE id=?', args: [id] });
+        await turso.execute({
+          sql: 'INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)',
+          args: [id, 'customers', now]
+        });
+        return NextResponse.json({ ok: true, message: 'Patron deleted successfully' });
+      }
+
+      const { getDatabase } = await import('@/lib/db');
+      const db = getDatabase();
+      db.prepare('DELETE FROM customers WHERE id=?').run(id);
+      db.prepare('INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)').run(id, 'customers', now);
+
+      try {
+        const turso = getTursoClient();
+        await turso.execute({ sql: 'DELETE FROM customers WHERE id=?', args: [id] });
+        await turso.execute({
+          sql: 'INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)',
+          args: [id, 'customers', now]
+        });
+      } catch (cloudErr) {}
+
+      return NextResponse.json({ ok: true, message: 'Patron deleted successfully' });
+    }
+
+    // =============================================================
     // 9. ACTION: update_customer_points
     // =============================================================
     if (b.action === 'update_customer_points') {
