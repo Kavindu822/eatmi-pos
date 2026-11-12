@@ -54,13 +54,19 @@ export async function POST() {
         // Apply deletion to local SQLite
         if (d.table_name === 'products') db.prepare('DELETE FROM products WHERE id=?').run(id);
         if (d.table_name === 'categories') db.prepare('DELETE FROM categories WHERE id=?').run(id);
-        if (d.table_name === 'customers') db.prepare('DELETE FROM customers WHERE id=?').run(id);
+        if (d.table_name === 'customers') {
+          try { db.prepare('UPDATE sales SET customer_id = NULL WHERE customer_id = ?').run(id); } catch {}
+          db.prepare('DELETE FROM customers WHERE id=?').run(id);
+        }
         db.prepare('INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)').run(id, d.table_name, d.deleted_at);
 
         // Apply deletion to Turso Cloud
         if (d.table_name === 'products') await turso.execute({ sql: 'DELETE FROM products WHERE id=?', args: [id] });
         if (d.table_name === 'categories') await turso.execute({ sql: 'DELETE FROM categories WHERE id=?', args: [id] });
-        if (d.table_name === 'customers') await turso.execute({ sql: 'DELETE FROM customers WHERE id=?', args: [id] });
+        if (d.table_name === 'customers') {
+          try { await turso.execute({ sql: 'UPDATE sales SET customer_id = NULL WHERE customer_id = ?', args: [id] }); } catch {}
+          await turso.execute({ sql: 'DELETE FROM customers WHERE id=?', args: [id] });
+        }
         await turso.execute({
           sql: 'INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)',
           args: [id, d.table_name, d.deleted_at]

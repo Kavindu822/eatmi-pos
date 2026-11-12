@@ -848,6 +848,10 @@ export async function POST(req: NextRequest) {
 
       if (isCloud) {
         const turso = getTursoClient();
+        // Unlink customer from historical sales to prevent FOREIGN KEY constraint failure
+        try {
+          await turso.execute({ sql: 'UPDATE sales SET customer_id = NULL WHERE customer_id = ?', args: [id] });
+        } catch (e) {}
         await turso.execute({ sql: 'DELETE FROM customers WHERE id=?', args: [id] });
         await turso.execute({
           sql: 'INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)',
@@ -858,11 +862,18 @@ export async function POST(req: NextRequest) {
 
       const { getDatabase } = await import('@/lib/db');
       const db = getDatabase();
+      // Unlink customer from historical sales to prevent FOREIGN KEY constraint failure
+      try {
+        db.prepare('UPDATE sales SET customer_id = NULL WHERE customer_id = ?').run(id);
+      } catch (e) {}
       db.prepare('DELETE FROM customers WHERE id=?').run(id);
       db.prepare('INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)').run(id, 'customers', now);
 
       try {
         const turso = getTursoClient();
+        try {
+          await turso.execute({ sql: 'UPDATE sales SET customer_id = NULL WHERE customer_id = ?', args: [id] });
+        } catch (e) {}
         await turso.execute({ sql: 'DELETE FROM customers WHERE id=?', args: [id] });
         await turso.execute({
           sql: 'INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)',
