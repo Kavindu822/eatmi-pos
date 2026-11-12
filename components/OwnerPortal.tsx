@@ -2108,7 +2108,7 @@ export default function OwnerPortal({
                     required
                     value={customRecoveryKey}
                     onChange={e => setCustomRecoveryKey(e.target.value)}
-                    placeholder="e.g. EATMI-8899"
+                    placeholder="Enter secret recovery key"
                     className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="text-[10px] text-stone-400 mt-1">

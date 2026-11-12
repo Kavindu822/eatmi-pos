@@ -56,7 +56,7 @@ export default function OwnerPinModal({ isOpen, onClose, onSuccess }: OwnerPinMo
         setPin('');
         onSuccess();
       } else {
-        setError(data.error || 'Invalid PIN code. Default is 1234.');
+        setError(data.error || 'Invalid PIN code.');
       }
     } catch (err: any) {
       setError('Connection error. Please try again.');
@@ -102,7 +102,7 @@ export default function OwnerPinModal({ isOpen, onClose, onSuccess }: OwnerPinMo
           onSuccess();
         }, 1200);
       } else {
-        setError(data.error || 'Invalid recovery key. Default key is EATMI-8899.');
+        setError(data.error || 'Invalid recovery key or phone number.');
       }
     } catch (err: any) {
       setError('Network error during recovery.');
@@ -208,8 +208,7 @@ export default function OwnerPinModal({ isOpen, onClose, onSuccess }: OwnerPinMo
             </button>
 
             {/* Forgot PIN Recovery Link */}
-            <div className="mt-4 pt-3 border-t border-stone-800/80 flex items-center justify-between text-[11px]">
-              <span className="text-stone-500">Default PIN: <b className="text-amber-400">1234</b></span>
+            <div className="mt-4 pt-3 border-t border-stone-800/80 flex items-center justify-end text-[11px]">
               <button
                 type="button"
                 onClick={() => {
@@ -251,14 +250,10 @@ export default function OwnerPinModal({ isOpen, onClose, onSuccess }: OwnerPinMo
               <input
                 type="text"
                 required
-                placeholder="e.g. EATMI-8899 or 077..."
                 value={recoveryInput}
                 onChange={e => setRecoveryInput(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-stone-800 border border-stone-700 text-stone-100 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase"
               />
-              <p className="text-[10px] text-stone-400 mt-1">
-                Default master emergency key is <span className="font-mono font-bold text-amber-400">EATMI-8899</span>
-              </p>
             </div>
 
             <div>
@@ -269,7 +264,7 @@ export default function OwnerPinModal({ isOpen, onClose, onSuccess }: OwnerPinMo
                 type="password"
                 required
                 maxLength={6}
-                placeholder="e.g. 1234"
+                placeholder="••••"
                 value={newPin}
                 onChange={e => setNewPin(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-stone-800 border border-stone-700 text-stone-100 text-xs font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-amber-500"
