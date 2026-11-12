@@ -2042,9 +2042,6 @@ export default function OwnerPortal({
                 <p>
                   <b>2. Owner Anytime Remote Access:</b> Open the URL on your personal smartphone or laptop from anywhere to supervise sales in real time, view revenue, add categories & items, and adjust loyalty points.
                 </p>
-                <p>
-                  <b>3. Free Instant Tunnel / Online Hosting:</b> You can deploy this Next.js app to <b>Vercel / Railway / Render</b> or run <b>Cloudflare Tunnel</b> on the shop machine for a 100% free secure HTTPS link accessible worldwide.
-                </p>
               </div>
             </div>
 
