@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Search,
   Plus,
@@ -17,7 +17,10 @@ import {
   Sparkles,
   AlertTriangle,
   Gift,
-  ArrowRight
+  ArrowRight,
+  X,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Category, Product, Customer, CartItem, Sale } from '@/lib/types';
@@ -66,6 +69,34 @@ export default function PosRegister({
   const [newCustomerModalOpen, setNewCustomerModalOpen] = useState(false);
   const [modifierModalOpen, setModifierModalOpen] = useState(false);
   const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
+
+  // Customer Search Container Ref (to close on outside click / tap)
+  const customerSearchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      if (customerSearchRef.current && !customerSearchRef.current.contains(event.target as Node)) {
+        setShowCustomerDropdown(false);
+      }
+    }
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setShowCustomerDropdown(false);
+      }
+    }
+
+    if (showCustomerDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showCustomerDropdown]);
 
   // Filter products
   const filteredProducts = useMemo(() => {
@@ -572,7 +603,7 @@ export default function PosRegister({
             </div>
           ) : (
             /* Search / Attach Customer */
-            <div className="space-y-1.5">
+            <div className="relative space-y-1.5" ref={customerSearchRef}>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <input
@@ -584,13 +615,27 @@ export default function PosRegister({
                       setShowCustomerDropdown(true);
                     }}
                     onFocus={() => setShowCustomerDropdown(true)}
-                    className="w-full px-3 py-1.5 rounded-xl border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-xs"
+                    className="w-full pl-3 pr-8 py-1.5 rounded-xl border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-xs"
                   />
+                  {/* Inline Collapse/Dismiss Button */}
+                  {showCustomerDropdown && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCustomerDropdown(false);
+                        playTapSound(audioEnabled);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition"
+                      title="Close patron list (or tap anywhere outside)"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
                 <button
                   type="button"
                   onClick={() => setNewCustomerModalOpen(true)}
-                  className="px-2.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold flex items-center gap-1 shadow-xs"
+                  className="px-2.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold flex items-center gap-1 shadow-xs shrink-0"
                   title="Register new patron"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
@@ -600,44 +645,67 @@ export default function PosRegister({
 
               {/* Autocomplete Dropdown */}
               {showCustomerDropdown && (
-                <div className="absolute top-12 left-3 right-3 z-30 bg-white rounded-xl shadow-xl border border-stone-200 divide-y divide-stone-100 max-h-48 overflow-y-auto">
-                  {filteredCustomers.length === 0 ? (
-                    <div className="p-3 text-center text-xs text-stone-500">
-                      No patrons found.{' '}
+                <>
+                  {/* Invisible Fullscreen Backdrop to dismiss on ANY side click / touch outside */}
+                  <div
+                    className="fixed inset-0 z-20"
+                    onClick={() => setShowCustomerDropdown(false)}
+                    onTouchStart={() => setShowCustomerDropdown(false)}
+                  />
+
+                  <div className="absolute top-11 left-0 right-0 z-30 bg-white rounded-xl shadow-2xl border border-amber-200 divide-y divide-stone-100 max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-150">
+                    {/* Header with dismiss button */}
+                    <div className="px-3 py-1.5 bg-amber-50/80 flex items-center justify-between text-[11px] text-amber-900 font-semibold sticky top-0 z-10 border-b border-amber-100">
+                      <span>Select Patron ({filteredCustomers.length})</span>
                       <button
-                        onClick={() => {
-                          setShowCustomerDropdown(false);
-                          setNewCustomerModalOpen(true);
-                        }}
-                        className="text-amber-600 font-semibold underline"
+                        type="button"
+                        onClick={() => setShowCustomerDropdown(false)}
+                        className="flex items-center gap-0.5 text-[10px] text-stone-500 hover:text-stone-800 px-1.5 py-0.5 rounded bg-white border border-stone-200 hover:bg-stone-50 transition shadow-xs"
+                        title="Close list"
                       >
-                        Register new
+                        <X className="w-3 h-3" />
+                        <span>Close</span>
                       </button>
                     </div>
-                  ) : (
-                    filteredCustomers.map(cust => (
-                      <div
-                        key={cust.id}
-                        onClick={() => {
-                          setSelectedCustomer(cust);
-                          setShowCustomerDropdown(false);
-                          setCustomerSearch('');
-                          playTapSound(audioEnabled);
-                        }}
-                        className="p-2.5 hover:bg-amber-50 cursor-pointer flex items-center justify-between text-xs"
-                      >
-                        <div>
-                          <div className="font-semibold text-stone-900">{cust.name}</div>
-                          <div className="text-[10px] text-stone-500 font-mono">{cust.phone}</div>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-bold text-amber-700">{cust.points} pts</span>
-                          <div className="text-[9px] text-stone-400">{cust.visits} visits</div>
-                        </div>
+
+                    {filteredCustomers.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-stone-500">
+                        No patrons found.{' '}
+                        <button
+                          onClick={() => {
+                            setShowCustomerDropdown(false);
+                            setNewCustomerModalOpen(true);
+                          }}
+                          className="text-amber-600 font-semibold underline"
+                        >
+                          Register new
+                        </button>
                       </div>
-                    ))
-                  )}
-                </div>
+                    ) : (
+                      filteredCustomers.map(cust => (
+                        <div
+                          key={cust.id}
+                          onClick={() => {
+                            setSelectedCustomer(cust);
+                            setShowCustomerDropdown(false);
+                            setCustomerSearch('');
+                            playTapSound(audioEnabled);
+                          }}
+                          className="p-2.5 hover:bg-amber-50 cursor-pointer flex items-center justify-between text-xs transition"
+                        >
+                          <div>
+                            <div className="font-semibold text-stone-900">{cust.name}</div>
+                            <div className="text-[10px] text-stone-500 font-mono">{cust.phone}</div>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-bold text-amber-700">{cust.points} pts</span>
+                            <div className="text-[9px] text-stone-400">{cust.visits} visits</div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}
