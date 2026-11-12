@@ -20,7 +20,8 @@ import {
   User,
   Loader2,
   AlertCircle,
-  AlertTriangle
+  AlertTriangle,
+  Banknote
 } from 'lucide-react';
 import { formatRupees, formatShortRupees } from '@/lib/utils';
 import { Sale, Customer } from '@/lib/types';
@@ -84,6 +85,11 @@ export default function ThermalReceiptModal({
   // 1. Print Customer Bill (Exact 1 Single Copy)
   const handlePrintCustomerBill = () => {
     setPrintStatus('Printing Customer Bill...');
+    // Automatically trigger cash drawer kick
+    try {
+      fetch('/api/open-drawer', { method: 'POST' }).catch(() => {});
+    } catch {}
+
     const html = generateReceiptHtml({
       sale,
       customerPointsBalance,
@@ -884,6 +890,25 @@ export default function ThermalReceiptModal({
             >
               <Send className="w-3.5 h-3.5 text-blue-600" />
               <span>{activeSlip === 'send' ? 'View Bill Slip' : 'Send E-Bill'}</span>
+            </button>
+
+            {/* Open Cash Drawer Button */}
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/open-drawer', { method: 'POST' });
+                  const d = await res.json();
+                  if (d.ok) {
+                    setPrintStatus('Cash Drawer Kicked Open!');
+                    setTimeout(() => setPrintStatus(''), 2500);
+                  }
+                } catch {}
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold shadow-xs transition"
+              title="Manually kick open cash drawer without printing"
+            >
+              <Banknote className="w-3.5 h-3.5 text-amber-700" />
+              <span>Kick Drawer</span>
             </button>
 
             {/* Print KOT (1x) */}

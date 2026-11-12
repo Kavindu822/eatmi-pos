@@ -236,6 +236,12 @@ export default function PosRegister({
       const data = await res.json();
 
       if (data.ok && data.sale) {
+        // Automatically kick cash drawer for Cash sales
+        if (paymentMethod === 'Cash') {
+          try {
+            fetch('/api/open-drawer', { method: 'POST' }).catch(() => {});
+          } catch {}
+        }
         playRegisterSound(audioEnabled);
         try {
           confetti({
