@@ -115,6 +115,15 @@ export function getDatabase(): DatabaseSync {
   ensureColumn('sales', 'cashier', "TEXT DEFAULT 'Worker 1'");
   ensureColumn('sales', 'synced', "INTEGER DEFAULT 0");
 
+  // 4b. Initialize Deleted Records (Tombstones for 2-way sync)
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS deleted_records (
+      id TEXT PRIMARY KEY NOT NULL,
+      table_name TEXT NOT NULL,
+      deleted_at TEXT NOT NULL
+    );
+  `);
+
   // 5. Initialize Settings Table
   _db.exec(`
     CREATE TABLE IF NOT EXISTS settings (

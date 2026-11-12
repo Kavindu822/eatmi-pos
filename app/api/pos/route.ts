@@ -497,6 +497,25 @@ export async function POST(req: NextRequest) {
           display_order=excluded.display_order
       `).run(id, name, slug, icon, image, description, display_order);
 
+      // Replicate to Turso if online
+      try {
+        const turso = getTursoClient();
+        await turso.execute({
+          sql: `
+            INSERT INTO categories(id, name, slug, icon, image, description, display_order)
+            VALUES(?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              name=excluded.name,
+              slug=excluded.slug,
+              icon=excluded.icon,
+              image=excluded.image,
+              description=excluded.description,
+              display_order=excluded.display_order
+          `,
+          args: [id, name, slug, icon, image, description, display_order]
+        });
+      } catch (cloudErr) {}
+
       const category = db.prepare('SELECT * FROM categories WHERE id=?').get(id);
       return NextResponse.json({ ok: true, category });
     }
@@ -526,6 +545,10 @@ export async function POST(req: NextRequest) {
         }
 
         await turso.execute({ sql: 'DELETE FROM categories WHERE id=?', args: [id] });
+        await turso.execute({
+          sql: 'INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)',
+          args: [id, 'categories', new Date().toISOString()]
+        });
         return NextResponse.json({ ok: true });
       }
 
@@ -542,6 +565,15 @@ export async function POST(req: NextRequest) {
       }
 
       db.prepare('DELETE FROM categories WHERE id=?').run(id);
+      db.prepare('INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)').run(id, 'categories', new Date().toISOString());
+      try {
+        const turso = getTursoClient();
+        await turso.execute({ sql: 'DELETE FROM categories WHERE id=?', args: [id] });
+        await turso.execute({
+          sql: 'INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)',
+          args: [id, 'categories', new Date().toISOString()]
+        });
+      } catch (cloudErr) {}
       return NextResponse.json({ ok: true });
     }
 
@@ -628,6 +660,31 @@ export async function POST(req: NextRequest) {
           is_active=excluded.is_active
       `).run(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active);
 
+      // Replicate to Turso if online
+      try {
+        const turso = getTursoClient();
+        await turso.execute({
+          sql: `
+            INSERT INTO products(id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              name=excluded.name,
+              sku=excluded.sku,
+              category_id=excluded.category_id,
+              category=excluded.category,
+              price=excluded.price,
+              cost=excluded.cost,
+              stock=excluded.stock,
+              image=excluded.image,
+              badge=excluded.badge,
+              dietary=excluded.dietary,
+              description=excluded.description,
+              is_active=excluded.is_active
+          `,
+          args: [id, name, sku, category_id, category, price, cost, stock, image, badge, dietary, description, is_active]
+        });
+      } catch (cloudErr) {}
+
       const product = db.prepare('SELECT * FROM products WHERE id=?').get(id);
       return NextResponse.json({ ok: true, product });
     }
@@ -640,12 +697,25 @@ export async function POST(req: NextRequest) {
       if (isCloud) {
         const turso = getTursoClient();
         await turso.execute({ sql: 'DELETE FROM products WHERE id=?', args: [id] });
+        await turso.execute({
+          sql: 'INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)',
+          args: [id, 'products', new Date().toISOString()]
+        });
         return NextResponse.json({ ok: true });
       }
 
       const { getDatabase } = await import('@/lib/db');
       const db = getDatabase();
       db.prepare('DELETE FROM products WHERE id=?').run(id);
+      db.prepare('INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)').run(id, 'products', new Date().toISOString());
+      try {
+        const turso = getTursoClient();
+        await turso.execute({ sql: 'DELETE FROM products WHERE id=?', args: [id] });
+        await turso.execute({
+          sql: 'INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)',
+          args: [id, 'products', new Date().toISOString()]
+        });
+      } catch (cloudErr) {}
       return NextResponse.json({ ok: true });
     }
 
@@ -666,6 +736,10 @@ export async function POST(req: NextRequest) {
       const { getDatabase } = await import('@/lib/db');
       const db = getDatabase();
       db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?').run(qty, id);
+      try {
+        const turso = getTursoClient();
+        await turso.execute({ sql: 'UPDATE products SET stock = stock + ? WHERE id = ?', args: [qty, id] });
+      } catch (cloudErr) {}
       const product = db.prepare('SELECT * FROM products WHERE id=?').get(id);
       return NextResponse.json({ ok: true, product });
     }
@@ -709,6 +783,16 @@ export async function POST(req: NextRequest) {
         VALUES(?, ?, ?, ?, 0, 0, 0, ?)
       `).run(id, name, phone, email, new Date().toISOString());
 
+      // Replicate to Turso if online
+      try {
+        const turso = getTursoClient();
+        await turso.execute({
+          sql: `INSERT INTO customers(id, name, phone, email, points, spent, visits, created_at)
+                VALUES(?, ?, ?, ?, 0, 0, 0, ?)`,
+          args: [id, name, phone, email, new Date().toISOString()]
+        });
+      } catch (cloudErr) {}
+
       const customer = db.prepare('SELECT * FROM customers WHERE id=?').get(id);
       return NextResponse.json({ ok: true, customer });
     }
@@ -739,6 +823,15 @@ export async function POST(req: NextRequest) {
       const { getDatabase } = await import('@/lib/db');
       const db = getDatabase();
       db.prepare('UPDATE customers SET name=?, phone=?, email=? WHERE id=?').run(name, phone, email, id);
+
+      try {
+        const turso = getTursoClient();
+        await turso.execute({
+          sql: 'UPDATE customers SET name=?, phone=?, email=? WHERE id=?',
+          args: [name, phone, email, id]
+        });
+      } catch (cloudErr) {}
+
       const customer = db.prepare('SELECT * FROM customers WHERE id=?').get(id);
       return NextResponse.json({ ok: true, customer });
     }
@@ -760,6 +853,12 @@ export async function POST(req: NextRequest) {
       const { getDatabase } = await import('@/lib/db');
       const db = getDatabase();
       db.prepare('UPDATE customers SET points=? WHERE id=?').run(points, id);
+
+      try {
+        const turso = getTursoClient();
+        await turso.execute({ sql: 'UPDATE customers SET points=? WHERE id=?', args: [points, id] });
+      } catch (cloudErr) {}
+
       const customer = db.prepare('SELECT * FROM customers WHERE id=?').get(id);
       return NextResponse.json({ ok: true, customer });
     }
