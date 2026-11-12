@@ -466,6 +466,227 @@ export function generateReceiptHtml({
 </html>`;
 }
 
+export interface ZReportOptions {
+  periodLabel: string;
+  sales: Sale[];
+  settings?: Record<string, string>;
+}
+
+export function generateZReportHtml({
+  periodLabel,
+  sales,
+  settings = {}
+}: ZReportOptions): string {
+  const storeName = settings.receipt_store_name || 'EATmi BAKERY & CAFE';
+  const tagline = settings.receipt_tagline || 'ARTISAN PÂTISSERIE & ROASTERY';
+  const address = settings.receipt_address || 'No. 07, Eugine Balasuriya Mawatha, Nupe, Matara';
+  const phone = settings.receipt_phone || '0740546060';
+  const paperWidth = settings.receipt_paper_width || '80mm';
+  const fontStyle = settings.receipt_font_style || 'sans';
+  const density = settings.receipt_print_density || 'normal';
+
+  const is80 = paperWidth === '80mm';
+  const widthMm = is80 ? '72mm' : '48mm';
+  const fontFamily = fontStyle === 'mono'
+    ? `'Courier New', Courier, monospace`
+    : `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+
+  const baseFontWeight = density === 'ultra_dark' ? '600' : '400';
+
+  let grossSales = 0;
+  let cashRevenue = 0;
+  let cardRevenue = 0;
+  let qrRevenue = 0;
+  let totalDiscounts = 0;
+  let totalRedeemed = 0;
+
+  const itemMap = new Map<string, { qty: number; revenue: number }>();
+
+  for (const s of sales) {
+    grossSales += s.total || 0;
+    totalDiscounts += s.discount || 0;
+    totalRedeemed += s.redeemed || 0;
+
+    if (s.payment === 'Cash') cashRevenue += s.total || 0;
+    else if (s.payment === 'Card') cardRevenue += s.total || 0;
+    else if (s.payment === 'QR') qrRevenue += s.total || 0;
+
+    try {
+      const lineItems = typeof s.items === 'string' ? JSON.parse(s.items) : s.items;
+      if (Array.isArray(lineItems)) {
+        for (const it of lineItems) {
+          const cur = itemMap.get(it.name) || { qty: 0, revenue: 0 };
+          cur.qty += it.qty || 1;
+          cur.revenue += (it.price || 0) * (it.qty || 1);
+          itemMap.set(it.name, cur);
+        }
+      }
+    } catch {}
+  }
+
+  const topItems = Array.from(itemMap.entries())
+    .map(([name, data]) => ({ name, ...data }))
+    .sort((a, b) => b.qty - a.qty);
+
+  const printTime = new Date().toLocaleString('en-LK', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Z-Report - ${periodLabel}</title>
+  <style>
+    @page { size: auto; margin: 0mm !important; }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    html, body {
+      width: 100% !important;
+      height: auto !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+      color: #000000 !important;
+      -webkit-text-fill-color: #000000 !important;
+      font-family: ${fontFamily};
+      font-size: ${is80 ? '11px' : '9.5px'};
+      line-height: 1.35;
+      font-weight: ${baseFontWeight};
+    }
+    .slip-container {
+      width: ${widthMm};
+      max-width: ${widthMm};
+      margin: 0 auto;
+      padding: 2mm 1.5mm 3mm 1.5mm;
+      height: auto;
+    }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .bold { font-weight: 700; }
+    .divider {
+      border-top: 1px dashed #000000;
+      margin: 4px 0;
+    }
+    .double-divider {
+      border-top: 2px solid #000000;
+      margin: 5px 0;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      margin: 2px 0;
+    }
+    .section-title {
+      font-weight: 800;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 4px 0 2px 0;
+    }
+    .sig-line {
+      margin-top: 12px;
+      padding-top: 2px;
+      border-top: 1px solid #444;
+      font-size: 9.5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="slip-container">
+    <div class="text-center">
+      <div style="font-size: 15px; font-weight: 900; letter-spacing: 0.5px;">${storeName}</div>
+      ${tagline ? `<div style="font-size: 9.5px; color: #333; margin-top: 1px;">${tagline}</div>` : ''}
+      ${address ? `<div style="font-size: 9px; color: #444; margin-top: 2px;">${address}</div>` : ''}
+      ${phone ? `<div style="font-size: 9px; color: #444;">Tel: ${phone}</div>` : ''}
+    </div>
+
+    <div class="double-divider"></div>
+
+    <div class="text-center">
+      <div style="font-size: 13px; font-weight: 900; letter-spacing: 0.5px;">DAILY Z-REPORT SETTLEMENT</div>
+      <div style="font-size: 10.5px; font-weight: 700; margin-top: 2px;">Period: ${periodLabel}</div>
+      <div style="font-size: 9px; color: #555;">Printed: ${printTime}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-title">REVENUE & CASH DRAWER</div>
+    <div class="row">
+      <span>Total Transactions:</span>
+      <span class="bold">${sales.length} orders</span>
+    </div>
+    <div class="row" style="font-size: 13px; font-weight: 800; margin: 4px 0;">
+      <span>GROSS SALES:</span>
+      <span>${formatRupees(grossSales)}</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-title">PAYMENT TENDER BREAKDOWN</div>
+    <div class="row">
+      <span>💵 Cash in Drawer:</span>
+      <span class="bold">${formatRupees(cashRevenue)}</span>
+    </div>
+    <div class="row">
+      <span>💳 Card Terminals:</span>
+      <span class="bold">${formatRupees(cardRevenue)}</span>
+    </div>
+    <div class="row">
+      <span>📱 QR / Transfers:</span>
+      <span class="bold">${formatRupees(qrRevenue)}</span>
+    </div>
+
+    ${totalDiscounts > 0 || totalRedeemed > 0 ? `
+      <div class="divider"></div>
+      <div class="section-title">DISCOUNTS & REDEMPTIONS</div>
+      ${totalDiscounts > 0 ? `
+        <div class="row">
+          <span>Manual Discounts:</span>
+          <span>${formatRupees(totalDiscounts)}</span>
+        </div>
+      ` : ''}
+      ${totalRedeemed > 0 ? `
+        <div class="row">
+          <span>Patron Points Redeemed:</span>
+          <span>${totalRedeemed} pts</span>
+        </div>
+      ` : ''}
+    ` : ''}
+
+    ${topItems.length > 0 ? `
+      <div class="divider"></div>
+      <div class="section-title">TOP SELLING ITEMS</div>
+      ${topItems.slice(0, 15).map(it => `
+        <div class="row" style="font-size: 9.5px;">
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%;">${it.name} (x${it.qty})</span>
+          <span class="bold">${formatRupees(it.revenue)}</span>
+        </div>
+      `).join('')}
+    ` : ''}
+
+    <div class="double-divider"></div>
+
+    <div style="margin-top: 10px;">
+      <div class="sig-line">Cashier Signature: </div>
+      <div class="sig-line" style="margin-top: 14px;">Manager / Owner Signature: </div>
+    </div>
+
+    <div class="text-center" style="font-size: 8.5px; color: #555; margin-top: 10px;">
+      *** OFFICIAL EATmi SYSTEM AUDIT REPORT ***
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 /**
  * Print cleanly via an isolated invisible iframe.
  * Prevents Chrome from including background page height, headers, modals, or creating extra sheets of paper!

@@ -80,7 +80,7 @@ export async function GET() {
         turso.execute('SELECT * FROM categories ORDER BY display_order ASC, name ASC'),
         turso.execute('SELECT * FROM products ORDER BY category ASC, name ASC'),
         turso.execute('SELECT * FROM customers ORDER BY points DESC, name ASC'),
-        turso.execute('SELECT * FROM sales ORDER BY created DESC LIMIT 500'),
+        turso.execute('SELECT * FROM sales ORDER BY created DESC LIMIT 2000'),
         turso.execute('SELECT key, value FROM settings')
       ]);
 
@@ -116,7 +116,7 @@ export async function GET() {
     const categories = db.prepare('SELECT * FROM categories ORDER BY display_order ASC, name ASC').all() as any[];
     const products = db.prepare('SELECT * FROM products ORDER BY category ASC, name ASC').all() as any[];
     const customers = db.prepare('SELECT * FROM customers ORDER BY points DESC, name ASC').all() as any[];
-    const sales = db.prepare('SELECT * FROM sales ORDER BY created DESC LIMIT 500').all() as any[];
+    const sales = db.prepare('SELECT * FROM sales ORDER BY created DESC LIMIT 2000').all() as any[];
     const settingsRows = db.prepare('SELECT key, value FROM settings').all() as any[];
 
     const settings: Record<string, string> = {};

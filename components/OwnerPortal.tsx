@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   TrendingUp,
   ShoppingBag,
@@ -36,12 +36,21 @@ import {
   Eye,
   EyeOff,
   Database,
-  Download
+  Download,
+  Calendar,
+  CalendarDays,
+  History,
+  CreditCard,
+  Banknote,
+  QrCode,
+  RotateCcw,
+  ArrowRight,
+  Filter
 } from 'lucide-react';
 import { Category, Product, Customer, Sale, SummaryStats } from '@/lib/types';
 import { formatRupees, formatShortRupees, centsToRupees } from '@/lib/utils';
 import { playTapSound, playRegisterSound } from '@/lib/sound';
-import { generateReceiptHtml, printReceiptHtml } from '@/lib/receipt';
+import { generateReceiptHtml, printReceiptHtml, generateZReportHtml } from '@/lib/receipt';
 import CategoryModal from './CategoryModal';
 import ProductModal from './ProductModal';
 import CustomerPointsModal from './CustomerPointsModal';
@@ -159,6 +168,248 @@ export default function OwnerPortal({
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [newCustomerModalOpen, setNewCustomerModalOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
+
+  // Reports & Financial Settlements State (Daily & Historical Old Days)
+  const [reportFilterMode, setReportFilterMode] = useState<'today' | 'yesterday' | '7days' | 'month' | 'all' | 'custom_date' | 'custom_range'>('today');
+  const [selectedSpecificDate, setSelectedSpecificDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  const [rangeStartDate, setRangeStartDate] = useState('');
+  const [rangeEndDate, setRangeEndDate] = useState('');
+  const [reportSearchQuery, setReportSearchQuery] = useState('');
+  const [activeReportSubView, setActiveReportSubView] = useState<'settlement' | 'archive'>('settlement');
+  const [reprintingSaleId, setReprintingSaleId] = useState<string | null>(null);
+
+  // Helper to extract YYYY-MM-DD from created string in local time
+  const getLocalDateStr = (isoOrDateStr: string) => {
+    try {
+      const d = new Date(isoOrDateStr);
+      if (isNaN(d.getTime())) return '';
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    } catch {
+      return '';
+    }
+  };
+
+  // Base dates
+  const todayDateStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const yesterdayDateStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const sevenDaysAgoDateStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const startOfMonthDateStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  }, []);
+
+  // Filtered sales based on report date filter
+  const filteredReportSales = useMemo(() => {
+    return sales.filter(s => {
+      const sDate = getLocalDateStr(s.created);
+      if (!sDate) return false;
+
+      if (reportFilterMode === 'today') return sDate === todayDateStr;
+      if (reportFilterMode === 'yesterday') return sDate === yesterdayDateStr;
+      if (reportFilterMode === '7days') return sDate >= sevenDaysAgoDateStr && sDate <= todayDateStr;
+      if (reportFilterMode === 'month') return sDate >= startOfMonthDateStr && sDate <= todayDateStr;
+      if (reportFilterMode === 'custom_date') return sDate === selectedSpecificDate;
+      if (reportFilterMode === 'custom_range') {
+        if (rangeStartDate && sDate < rangeStartDate) return false;
+        if (rangeEndDate && sDate > rangeEndDate) return false;
+        return true;
+      }
+      return true; // 'all'
+    });
+  }, [sales, reportFilterMode, selectedSpecificDate, rangeStartDate, rangeEndDate, todayDateStr, yesterdayDateStr, sevenDaysAgoDateStr, startOfMonthDateStr]);
+
+  // Report Period Label
+  const reportPeriodLabel = useMemo(() => {
+    if (reportFilterMode === 'today') {
+      return `Today (${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })})`;
+    }
+    if (reportFilterMode === 'yesterday') {
+      const yd = new Date();
+      yd.setDate(yd.getDate() - 1);
+      return `Yesterday (${yd.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })})`;
+    }
+    if (reportFilterMode === '7days') {
+      return `Last 7 Days (${sevenDaysAgoDateStr} to ${todayDateStr})`;
+    }
+    if (reportFilterMode === 'month') {
+      return `This Month (${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})`;
+    }
+    if (reportFilterMode === 'custom_date') {
+      if (!selectedSpecificDate) return 'Selected Date';
+      const parts = selectedSpecificDate.split('-');
+      if (parts.length === 3) {
+        const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      }
+      return selectedSpecificDate;
+    }
+    if (reportFilterMode === 'custom_range') {
+      return `${rangeStartDate || 'Start'} to ${rangeEndDate || 'Today'}`;
+    }
+    return 'All-Time Historical Sales';
+  }, [reportFilterMode, selectedSpecificDate, rangeStartDate, rangeEndDate, todayDateStr, yesterdayDateStr, sevenDaysAgoDateStr]);
+
+  // Settlement stats calculated dynamically for the active filter
+  const settlementStats = useMemo(() => {
+    let grossSales = 0;
+    let cashRevenue = 0;
+    let cardRevenue = 0;
+    let qrRevenue = 0;
+    let totalDiscounts = 0;
+    let totalRedeemed = 0;
+
+    for (const s of filteredReportSales) {
+      grossSales += s.total || 0;
+      totalDiscounts += s.discount || 0;
+      totalRedeemed += s.redeemed || 0;
+
+      if (s.payment === 'Cash') cashRevenue += s.total || 0;
+      else if (s.payment === 'Card') cardRevenue += s.total || 0;
+      else if (s.payment === 'QR') qrRevenue += s.total || 0;
+    }
+
+    const orderCount = filteredReportSales.length;
+    const avgOrderValue = orderCount > 0 ? Math.round(grossSales / orderCount) : 0;
+
+    return {
+      grossSales,
+      cashRevenue,
+      cardRevenue,
+      qrRevenue,
+      totalDiscounts,
+      totalRedeemed,
+      orderCount,
+      avgOrderValue
+    };
+  }, [filteredReportSales]);
+
+  // Day-by-Day Historical Archive grouping ALL sales
+  const dailyArchive = useMemo(() => {
+    const map = new Map<string, {
+      date: string;
+      total: number;
+      orders: number;
+      cash: number;
+      card: number;
+      qr: number;
+      salesList: Sale[];
+    }>();
+
+    for (const s of sales) {
+      const dStr = getLocalDateStr(s.created);
+      if (!dStr) continue;
+
+      let entry = map.get(dStr);
+      if (!entry) {
+        entry = {
+          date: dStr,
+          total: 0,
+          orders: 0,
+          cash: 0,
+          card: 0,
+          qr: 0,
+          salesList: []
+        };
+        map.set(dStr, entry);
+      }
+
+      entry.total += s.total || 0;
+      entry.orders += 1;
+      if (s.payment === 'Cash') entry.cash += s.total || 0;
+      else if (s.payment === 'Card') entry.card += s.total || 0;
+      else if (s.payment === 'QR') entry.qr += s.total || 0;
+      entry.salesList.push(s);
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }, [sales]);
+
+  // Top products sold during the filtered period
+  const topItemsForPeriod = useMemo(() => {
+    const map = new Map<string, { count: number; revenue: number }>();
+    for (const s of filteredReportSales) {
+      try {
+        const lines = typeof s.items === 'string' ? JSON.parse(s.items) : s.items;
+        if (Array.isArray(lines)) {
+          for (const line of lines) {
+            const cur = map.get(line.name) || { count: 0, revenue: 0 };
+            cur.count += line.qty || 1;
+            cur.revenue += (line.price || 0) * (line.qty || 1);
+            map.set(line.name, cur);
+          }
+        }
+      } catch {}
+    }
+    return Array.from(map.entries())
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.count - a.count);
+  }, [filteredReportSales]);
+
+  // Filtered sales matching the transaction search query
+  const searchedReportSales = useMemo(() => {
+    if (!reportSearchQuery.trim()) return filteredReportSales;
+    const q = reportSearchQuery.trim().toLowerCase();
+    return filteredReportSales.filter(s => {
+      const matchId = s.id?.toLowerCase().includes(q);
+      const matchCustomer = s.customer_name?.toLowerCase().includes(q);
+      const matchPayment = s.payment?.toLowerCase().includes(q);
+      let matchItems = false;
+      try {
+        const lines = typeof s.items === 'string' ? JSON.parse(s.items) : s.items;
+        if (Array.isArray(lines)) {
+          matchItems = lines.some((it: any) => it.name?.toLowerCase().includes(q));
+        }
+      } catch {}
+      return matchId || matchCustomer || matchPayment || matchItems;
+    });
+  }, [filteredReportSales, reportSearchQuery]);
+
+  // Reprint a historical sale receipt
+  const handleReprintReceipt = (sale: Sale) => {
+    playTapSound(audioEnabled);
+    setReprintingSaleId(sale.id);
+    const html = generateReceiptHtml({
+      sale,
+      settings,
+      slipType: 'customer',
+      paperWidth: (settings.receipt_paper_width as any) || '80mm',
+      showLogo: settings.receipt_show_logo !== 'false'
+    });
+    printReceiptHtml(html, () => {
+      setReprintingSaleId(null);
+    });
+  };
+
+  // Print official Z-report for given sales and period
+  const handlePrintZReport = (targetSales: Sale[], customLabel?: string) => {
+    playTapSound(audioEnabled);
+    const html = generateZReportHtml({
+      periodLabel: customLabel || reportPeriodLabel,
+      sales: targetSales,
+      settings
+    });
+    printReceiptHtml(html);
+  };
 
   // PIN Change State
   const [newPin, setNewPin] = useState('');
@@ -1375,77 +1626,483 @@ export default function OwnerPortal({
         {/* TAB 5: DAILY Z-REPORT & FINANCIAL SETTLEMENT             */}
         {/* ======================================================== */}
         {subTab === 'reports' && (
-          <div className="space-y-4 max-w-4xl mx-auto">
-            {/* Z-Report Card */}
-            <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4">
-              <div className="flex items-center justify-between pb-4 border-b border-stone-200">
-                <div>
-                  <h3 className="font-bold text-base text-stone-900">End-of-Day Z-Report Settlement</h3>
-                  <p className="text-xs text-stone-500">Official cash drawer and revenue reconciliation</p>
+          <div className="space-y-5 max-w-5xl mx-auto">
+            {/* Top Control Bar: View Switcher & Period Filters */}
+            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-stone-100">
+                {/* View Switcher: Settlement vs Historical Archive */}
+                <div className="flex items-center gap-1.5 p-1 bg-stone-100/80 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveReportSubView('settlement');
+                      playTapSound(audioEnabled);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                      activeReportSubView === 'settlement'
+                        ? 'bg-white text-stone-900 shadow-xs'
+                        : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Daily Settlement & Z-Report</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveReportSubView('archive');
+                      playTapSound(audioEnabled);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                      activeReportSubView === 'archive'
+                        ? 'bg-white text-stone-900 shadow-xs'
+                        : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                  >
+                    <History className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Day-by-Day Historical Archive ({dailyArchive.length} Days)</span>
+                  </button>
                 </div>
 
+                {/* Print Z-Report for Active Period */}
                 <button
-                  onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-semibold shadow-md transition"
+                  type="button"
+                  onClick={() => handlePrintZReport(filteredReportSales)}
+                  disabled={filteredReportSales.length === 0}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
+                  title="Print official ESC/POS Z-Report slip for this period"
                 >
-                  <Printer className="w-4 h-4 text-amber-400" />
+                  <Printer className="w-3.5 h-3.5 text-amber-400" />
                   <span>Print Z-Report</span>
                 </button>
               </div>
 
-              {/* Settlement Summary Table */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
-                  <span className="text-[11px] text-stone-500">Gross Sales:</span>
-                  <div className="font-mono font-bold text-base text-stone-900 mt-1">
-                    {formatRupees(summary.todayRevenue)}
-                  </div>
+              {/* Date Filter Presets */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider mr-1 flex items-center gap-1">
+                    <Filter className="w-3 h-3" /> Period:
+                  </span>
+
+                  {[
+                    { id: 'today', label: 'Today' },
+                    { id: 'yesterday', label: 'Yesterday' },
+                    { id: '7days', label: 'Last 7 Days' },
+                    { id: 'month', label: 'This Month' },
+                    { id: 'all', label: 'All Recorded Days' },
+                    { id: 'custom_date', label: 'Pick Specific Date' },
+                    { id: 'custom_range', label: 'Custom Range' }
+                  ].map(tab => {
+                    const isSelected = reportFilterMode === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => {
+                          setReportFilterMode(tab.id as any);
+                          playTapSound(audioEnabled);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition border ${
+                          isSelected
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                            : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100 hover:text-stone-900'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
-                  <span className="text-[11px] text-stone-500">Cash in Drawer:</span>
-                  <div className="font-mono font-bold text-base text-emerald-700 mt-1">
-                    {formatRupees(summary.cashRevenue)}
+                {/* Specific Date Picker */}
+                {reportFilterMode === 'custom_date' && (
+                  <div className="flex items-center gap-2 bg-amber-50/70 border border-amber-200/80 px-3 py-1 rounded-xl animate-in fade-in">
+                    <Calendar className="w-4 h-4 text-amber-700" />
+                    <span className="text-xs font-semibold text-amber-900">Choose Date:</span>
+                    <input
+                      type="date"
+                      value={selectedSpecificDate}
+                      onChange={e => setSelectedSpecificDate(e.target.value)}
+                      className="text-xs font-mono font-bold bg-white border border-stone-300 rounded-lg px-2 py-0.5 text-stone-800 focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                    />
                   </div>
-                </div>
+                )}
 
-                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
-                  <span className="text-[11px] text-stone-500">Card Terminals:</span>
-                  <div className="font-mono font-bold text-base text-blue-700 mt-1">
-                    {formatRupees(summary.cardRevenue)}
+                {/* Custom Range Pickers */}
+                {reportFilterMode === 'custom_range' && (
+                  <div className="flex flex-wrap items-center gap-2 bg-amber-50/70 border border-amber-200/80 px-3 py-1 rounded-xl animate-in fade-in">
+                    <CalendarDays className="w-4 h-4 text-amber-700" />
+                    <span className="text-xs font-semibold text-amber-900">From:</span>
+                    <input
+                      type="date"
+                      value={rangeStartDate}
+                      onChange={e => setRangeStartDate(e.target.value)}
+                      className="text-xs font-mono bg-white border border-stone-300 rounded-lg px-2 py-0.5 text-stone-800"
+                    />
+                    <span className="text-xs font-semibold text-amber-900">To:</span>
+                    <input
+                      type="date"
+                      value={rangeEndDate}
+                      onChange={e => setRangeEndDate(e.target.value)}
+                      className="text-xs font-mono bg-white border border-stone-300 rounded-lg px-2 py-0.5 text-stone-800"
+                    />
                   </div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
-                  <span className="text-[11px] text-stone-500">QR / Transfers:</span>
-                  <div className="font-mono font-bold text-base text-amber-700 mt-1">
-                    {formatRupees(summary.qrRevenue)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Transaction Logs */}
-              <div className="pt-2">
-                <h4 className="font-semibold text-xs text-stone-700 mb-2">Today's Transactions Log</h4>
-                <div className="border border-stone-200 rounded-xl overflow-hidden divide-y divide-stone-100 max-h-80 overflow-y-auto">
-                  {sales.map(s => (
-                    <div key={s.id} className="p-2.5 flex items-center justify-between text-xs hover:bg-stone-50">
-                      <div>
-                        <span className="font-mono font-bold">#{s.id}</span>
-                        <span className="text-stone-400 ml-2">{new Date(s.created).toLocaleTimeString()}</span>
-                        <span className="text-stone-700 ml-2 font-medium">{s.customer_name}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-semibold px-2 py-0.5 rounded bg-stone-100 text-stone-700 text-[10px]">
-                          {s.payment}
-                        </span>
-                        <span className="font-mono font-bold text-stone-900">{formatRupees(s.total)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                )}
               </div>
             </div>
+
+            {/* ======================================================== */}
+            {/* VIEW A: SETTLEMENT CARDS & DETAILED TRANSACTIONS         */}
+            {/* ======================================================== */}
+            {activeReportSubView === 'settlement' && (
+              <div className="space-y-4">
+                {/* Z-Report Card */}
+                <div className="bg-white p-5 sm:p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4">
+                  {/* Title & Active Filter Summary */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-stone-200">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-base text-stone-900">End-of-Day Z-Report Settlement</h3>
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                          {reportPeriodLabel}
+                        </span>
+                      </div>
+                      <p className="text-xs text-stone-500 mt-0.5">
+                        Official revenue reconciliation, cash in drawer & payment audit
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handlePrintZReport(filteredReportSales)}
+                        disabled={filteredReportSales.length === 0}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold shadow-md transition disabled:opacity-50"
+                      >
+                        <Printer className="w-4 h-4 text-amber-400" />
+                        <span>Print Slip</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Settlement Summary Table (Gross, Cash, Card, QR) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200">
+                      <span className="text-[11px] font-semibold text-stone-500">Gross Sales:</span>
+                      <div className="font-mono font-extrabold text-lg text-stone-900 mt-1">
+                        {formatRupees(settlementStats.grossSales)}
+                      </div>
+                      <div className="text-[10px] text-stone-400 mt-0.5">
+                        {settlementStats.orderCount} total orders
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-200/80">
+                      <span className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1">
+                        <Banknote className="w-3.5 h-3.5" /> Cash in Drawer:
+                      </span>
+                      <div className="font-mono font-extrabold text-lg text-emerald-700 mt-1">
+                        {formatRupees(settlementStats.cashRevenue)}
+                      </div>
+                      <div className="text-[10px] text-emerald-600/80 mt-0.5">
+                        {settlementStats.grossSales > 0
+                          ? `${Math.round((settlementStats.cashRevenue / settlementStats.grossSales) * 100)}% of total`
+                          : '0%'}
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-blue-50/50 border border-blue-200/80">
+                      <span className="text-[11px] font-semibold text-blue-800 flex items-center gap-1">
+                        <CreditCard className="w-3.5 h-3.5" /> Card Terminals:
+                      </span>
+                      <div className="font-mono font-extrabold text-lg text-blue-700 mt-1">
+                        {formatRupees(settlementStats.cardRevenue)}
+                      </div>
+                      <div className="text-[10px] text-blue-600/80 mt-0.5">
+                        {settlementStats.grossSales > 0
+                          ? `${Math.round((settlementStats.cardRevenue / settlementStats.grossSales) * 100)}% of total`
+                          : '0%'}
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-amber-50/50 border border-amber-200/80">
+                      <span className="text-[11px] font-semibold text-amber-800 flex items-center gap-1">
+                        <QrCode className="w-3.5 h-3.5" /> QR / Transfers:
+                      </span>
+                      <div className="font-mono font-extrabold text-lg text-amber-700 mt-1">
+                        {formatRupees(settlementStats.qrRevenue)}
+                      </div>
+                      <div className="text-[10px] text-amber-600/80 mt-0.5">
+                        {settlementStats.grossSales > 0
+                          ? `${Math.round((settlementStats.qrRevenue / settlementStats.grossSales) * 100)}% of total`
+                          : '0%'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Secondary Metrics Bar */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
+                    <div className="px-3 py-2 rounded-lg bg-stone-100/60 text-stone-600 flex justify-between">
+                      <span>Total Bills:</span>
+                      <span className="font-mono font-bold text-stone-900">{settlementStats.orderCount}</span>
+                    </div>
+                    <div className="px-3 py-2 rounded-lg bg-stone-100/60 text-stone-600 flex justify-between">
+                      <span>Avg Order Value:</span>
+                      <span className="font-mono font-bold text-stone-900">{formatRupees(settlementStats.avgOrderValue)}</span>
+                    </div>
+                    <div className="px-3 py-2 rounded-lg bg-stone-100/60 text-stone-600 flex justify-between">
+                      <span>Discounts:</span>
+                      <span className="font-mono font-bold text-stone-900">{formatRupees(settlementStats.totalDiscounts)}</span>
+                    </div>
+                    <div className="px-3 py-2 rounded-lg bg-stone-100/60 text-stone-600 flex justify-between">
+                      <span>Points Redeemed:</span>
+                      <span className="font-mono font-bold text-amber-800">{settlementStats.totalRedeemed} pts</span>
+                    </div>
+                  </div>
+
+                  {/* Top Items Sold During This Period */}
+                  {topItemsForPeriod.length > 0 && (
+                    <div className="pt-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold text-xs text-stone-700 uppercase tracking-wider">
+                          Top Items Sold ({reportPeriodLabel})
+                        </h4>
+                        <span className="text-[11px] text-stone-400 font-mono">
+                          {topItemsForPeriod.length} unique items
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {topItemsForPeriod.slice(0, 4).map((item, idx) => (
+                          <div key={item.name} className="p-2 rounded-lg bg-stone-50 border border-stone-200/80 text-xs">
+                            <div className="flex items-center justify-between font-bold text-stone-800">
+                              <span className="truncate" title={item.name}>{idx + 1}. {item.name}</span>
+                              <span className="text-amber-800 font-mono">x{item.count}</span>
+                            </div>
+                            <div className="text-[11px] font-mono text-stone-500 mt-0.5">
+                              {formatRupees(item.revenue)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Transaction Logs for the Selected Period */}
+                  <div className="pt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                      <h4 className="font-semibold text-xs text-stone-700 uppercase tracking-wider">
+                        Transactions Log ({searchedReportSales.length} Orders)
+                      </h4>
+
+                      {/* Search Bar */}
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                        <input
+                          type="text"
+                          value={reportSearchQuery}
+                          onChange={e => setReportSearchQuery(e.target.value)}
+                          placeholder="Search receipt #, customer, item..."
+                          className="pl-8 pr-3 py-1 text-xs rounded-lg border border-stone-200 bg-stone-50 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-amber-500 w-56 sm:w-64"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="border border-stone-200 rounded-xl overflow-hidden divide-y divide-stone-100 max-h-96 overflow-y-auto">
+                      {searchedReportSales.length === 0 ? (
+                        <div className="p-8 text-center text-xs text-stone-400">
+                          No transactions found for the selected period ({reportPeriodLabel}).
+                        </div>
+                      ) : (
+                        searchedReportSales.map(s => {
+                          let itemsSummary = '';
+                          try {
+                            const parsed = typeof s.items === 'string' ? JSON.parse(s.items) : s.items;
+                            if (Array.isArray(parsed)) {
+                              itemsSummary = parsed.map((it: any) => `${it.qty}x ${it.name}`).join(', ');
+                            }
+                          } catch {}
+
+                          const dateFormatted = new Date(s.created).toLocaleString('en-LK', {
+                            dateStyle: 'short',
+                            timeStyle: 'short'
+                          });
+
+                          return (
+                            <div key={s.id} className="p-2.5 flex items-center justify-between text-xs hover:bg-stone-50/90 transition gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono font-bold text-stone-900">#{s.id}</span>
+                                  <span className="text-stone-400 font-mono text-[11px]">{dateFormatted}</span>
+                                  <span className="font-semibold text-stone-800">{s.customer_name || 'Walk-in Patron'}</span>
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    s.payment === 'Cash'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : s.payment === 'Card'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {s.payment}
+                                  </span>
+                                </div>
+                                {itemsSummary && (
+                                  <div className="text-[11px] text-stone-500 truncate mt-0.5" title={itemsSummary}>
+                                    {itemsSummary}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="font-mono font-bold text-stone-900 text-sm">
+                                  {formatRupees(s.total)}
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleReprintReceipt(s)}
+                                  disabled={reprintingSaleId === s.id}
+                                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-semibold border border-stone-300 transition"
+                                  title="Reprint Customer Bill"
+                                >
+                                  <Receipt className="w-3 h-3 text-amber-700" />
+                                  <span>{reprintingSaleId === s.id ? 'Printing...' : 'Reprint'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* VIEW B: DAY-BY-DAY HISTORICAL ARCHIVE                    */}
+            {/* ======================================================== */}
+            {activeReportSubView === 'archive' && (
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-stone-200">
+                  <div>
+                    <h3 className="font-bold text-base text-stone-900">Historical Day-by-Day Sales Archive</h3>
+                    <p className="text-xs text-stone-500">
+                      Audit past trading days, inspect revenue records, and print daily Z-Reports
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-stone-200">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-stone-100/70 text-stone-600 font-bold border-b border-stone-200">
+                        <th className="py-3 px-4">Date</th>
+                        <th className="py-3 px-3 text-center">Orders</th>
+                        <th className="py-3 px-3 font-mono">Gross Sales</th>
+                        <th className="py-3 px-3 font-mono">Cash</th>
+                        <th className="py-3 px-3 font-mono">Card</th>
+                        <th className="py-3 px-3 font-mono">QR / Online</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {dailyArchive.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-stone-400">
+                            No historical sales days recorded yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        dailyArchive.map(day => {
+                          const isToday = day.date === todayDateStr;
+                          const isYesterday = day.date === yesterdayDateStr;
+
+                          const dateLabel = isToday
+                            ? 'Today'
+                            : isYesterday
+                            ? 'Yesterday'
+                            : '';
+
+                          const parts = day.date.split('-');
+                          const formattedDate = parts.length === 3
+                            ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])).toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                              })
+                            : day.date;
+
+                          return (
+                            <tr key={day.date} className="hover:bg-stone-50/80 transition">
+                              <td className="py-3 px-4">
+                                <div className="font-bold text-stone-900 font-mono text-sm">{formattedDate}</div>
+                                {dateLabel && (
+                                  <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold mt-0.5 ${
+                                    isToday ? 'bg-amber-100 text-amber-900' : 'bg-stone-200 text-stone-700'
+                                  }`}>
+                                    {dateLabel}
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="py-3 px-3 text-center font-mono font-bold text-stone-700">
+                                {day.orders}
+                              </td>
+
+                              <td className="py-3 px-3 font-mono font-bold text-stone-900 text-sm">
+                                {formatRupees(day.total)}
+                              </td>
+
+                              <td className="py-3 px-3 font-mono text-emerald-700 font-semibold">
+                                {formatRupees(day.cash)}
+                              </td>
+
+                              <td className="py-3 px-3 font-mono text-blue-700 font-semibold">
+                                {formatRupees(day.card)}
+                              </td>
+
+                              <td className="py-3 px-3 font-mono text-amber-700 font-semibold">
+                                {formatRupees(day.qr)}
+                              </td>
+
+                              <td className="py-3 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReportFilterMode('custom_date');
+                                      setSelectedSpecificDate(day.date);
+                                      setActiveReportSubView('settlement');
+                                      playTapSound(audioEnabled);
+                                    }}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold border border-stone-300 transition"
+                                    title="View detailed transactions and metrics for this day"
+                                  >
+                                    <span>Inspect Day</span>
+                                    <ArrowRight className="w-3 h-3 text-stone-500" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePrintZReport(day.salesList, `${formattedDate} (${dateLabel || 'Historical'})`)}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-900 hover:bg-black text-white text-xs font-semibold shadow-xs transition"
+                                    title="Print official Z-Report for this day"
+                                  >
+                                    <Printer className="w-3 h-3 text-amber-400" />
+                                    <span>Z-Report</span>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
