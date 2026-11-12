@@ -57,6 +57,7 @@ export default function PosRegister({
   const [redeemPoints, setRedeemPoints] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'QR'>('Cash');
   const [tenderedRupees, setTenderedRupees] = useState<number>(0);
+  const [tenderedInput, setTenderedInput] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -184,6 +185,7 @@ export default function PosRegister({
     setSelectedCustomer(null);
     setRedeemPoints(false);
     setTenderedRupees(0);
+    setTenderedInput('');
     setNotes('');
     setTableNo('');
   };
@@ -192,6 +194,16 @@ export default function PosRegister({
   const setQuickTender = (rupees: number) => {
     playTapSound(audioEnabled);
     setTenderedRupees(rupees);
+    setTenderedInput(rupees > 0 ? String(rupees) : '');
+  };
+
+  // Tender add shortcuts (e.g. +100, +500)
+  const addTender = (addRupees: number) => {
+    playTapSound(audioEnabled);
+    const base = tenderedRupees > 0 ? tenderedRupees : Math.ceil(total / 100);
+    const next = base + addRupees;
+    setTenderedRupees(next);
+    setTenderedInput(String(next));
   };
 
   // Complete Sale
@@ -229,6 +241,7 @@ export default function PosRegister({
           order_type: orderType,
           table_no: tableNo.trim(),
           notes: notes.trim(),
+          status: 'preparing',
           cashier: 'Cashier 1'
         })
       });
@@ -799,39 +812,139 @@ export default function PosRegister({
             </button>
           </div>
 
-          {/* Quick Cash Tender & Change Due */}
+          {/* Cash Tender Input & Change Due */}
           {paymentMethod === 'Cash' && total > 0 && (
-            <div className="space-y-1.5 pt-1">
-              <div className="flex items-center gap-1 overflow-x-auto">
-                <button
-                  type="button"
-                  onClick={() => setQuickTender(Math.ceil(total / 100))}
-                  className="px-2 py-1 rounded-lg bg-stone-200 hover:bg-stone-300 text-[10px] font-bold text-stone-800 font-mono"
-                >
-                  Exact
-                </button>
-                {[500, 1000, 2000, 5000, 10000].map(amt => (
+            <div className="space-y-2 pt-1.5 p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+              {/* Header: Label + Reset */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-stone-700 flex items-center gap-1">
+                  <Banknote className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Customer Given Money (Rs.):</span>
+                </span>
+                {tenderedRupees > 0 && (
                   <button
-                    key={amt}
                     type="button"
-                    onClick={() => setQuickTender(amt)}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-bold font-mono transition ${
-                      tenderedRupees === amt
-                        ? 'bg-amber-600 text-white'
-                        : 'bg-white border border-stone-200 hover:bg-stone-100 text-stone-800'
-                    }`}
+                    onClick={() => {
+                      setTenderedInput('');
+                      setTenderedRupees(0);
+                      playTapSound(audioEnabled);
+                    }}
+                    className="text-[10px] text-stone-400 hover:text-stone-700 underline font-mono"
                   >
-                    Rs. {amt.toLocaleString()}
+                    Reset
                   </button>
-                ))}
+                )}
               </div>
 
-              {/* Change indicator */}
-              <div className="flex items-center justify-between bg-stone-900 text-white p-2 rounded-xl text-xs font-mono">
-                <span className="text-stone-400">Change Due:</span>
-                <span className="font-bold text-emerald-400 text-sm">
-                  {formatRupees(changeDueCents)}
+              {/* Type Given Money Input Box */}
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 font-bold font-mono text-sm">
+                  Rs.
                 </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={tenderedInput}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setTenderedInput(val);
+                    const num = parseFloat(val);
+                    setTenderedRupees(isNaN(num) ? 0 : Math.max(0, num));
+                  }}
+                  placeholder={`${(total / 100).toLocaleString()} (e.g. 1600)`}
+                  className="w-full pl-10 pr-24 py-2 bg-white border border-stone-300 rounded-xl font-mono font-bold text-base text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-inner"
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const exact = Math.ceil(total / 100);
+                      setTenderedInput(String(exact));
+                      setTenderedRupees(exact);
+                      playTapSound(audioEnabled);
+                    }}
+                    className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-bold font-mono transition"
+                    title="Fill exact bill amount"
+                  >
+                    Exact
+                  </button>
+                </div>
+              </div>
+
+              {/* Currency Presets & Quick Add */}
+              <div className="space-y-1 pt-0.5">
+                <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                  {[500, 1000, 1500, 2000, 2500, 5000, 10000].map(amt => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setQuickTender(amt)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold font-mono whitespace-nowrap transition border ${
+                        tenderedRupees === amt
+                          ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                          : 'bg-white border-stone-200 hover:bg-stone-100 text-stone-700'
+                      }`}
+                    >
+                      Rs. {amt.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Quick Add Chips */}
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-stone-400 font-semibold mr-0.5">+Add:</span>
+                  {[50, 100, 500, 1000].map(inc => (
+                    <button
+                      key={inc}
+                      type="button"
+                      onClick={() => addTender(inc)}
+                      className="px-2 py-0.5 rounded-md bg-stone-200/80 hover:bg-stone-300 text-[10px] font-bold font-mono text-stone-700 transition"
+                      title={`Add Rs. ${inc} to received amount`}
+                    >
+                      +{inc}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live Change Indicator */}
+              <div className="pt-0.5">
+                {tenderedRupees > 0 && tenderedCents < total ? (
+                  <div className="flex items-center justify-between bg-rose-950 text-white p-2.5 rounded-xl font-mono shadow-sm border border-rose-800">
+                    <div>
+                      <span className="text-xs text-rose-300 font-semibold flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                        Short / Still Due:
+                      </span>
+                      <span className="text-[10px] text-rose-200/70">
+                        Received: {formatRupees(tenderedCents)}
+                      </span>
+                    </div>
+                    <div className="text-right font-extrabold text-rose-400 text-base">
+                      -{formatRupees(total - tenderedCents)}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between bg-stone-900 text-white p-2.5 rounded-xl font-mono shadow-sm">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
+                        <span className="text-xs text-stone-300 font-semibold">Change to Give Back:</span>
+                      </div>
+                      <span className="text-[10px] text-stone-400">
+                        {tenderedRupees > 0 && tenderedRupees * 100 !== total
+                          ? `Received: ${formatRupees(tenderedCents)}`
+                          : `Exact Payment (${formatRupees(total)})`}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-extrabold text-emerald-400 text-lg sm:text-xl">
+                        {formatRupees(changeDueCents)}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
