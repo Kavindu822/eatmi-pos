@@ -2401,45 +2401,7 @@ export default function OwnerPortal({
                 )}
               </div>
 
-              {/* Cloud Database Backup & Disaster Recovery */}
-              <div className="pt-3.5 border-t border-stone-200 space-y-2.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Database className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <div>
-                      <span className="text-xs font-bold text-stone-900 block">
-                        Disaster Recovery: Email Complete Database Backup
-                      </span>
-                      <p className="text-[10.5px] text-stone-500">
-                        Sends your full <code>counter.sqlite</code> database file directly to your Gmail as an attachment.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleEmailDbBackup}
-                    disabled={isBackingUpDb}
-                    className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition whitespace-nowrap disabled:opacity-50"
-                  >
-                    {isBackingUpDb ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Sending Backup...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Email DB Backup Now</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                {backupDbStatus && (
-                  <div className="text-[11px] p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 font-medium">
-                    {backupDbStatus}
-                  </div>
-                )}
-              </div>
+
             </div>
           </div>
         )}
