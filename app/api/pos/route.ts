@@ -283,13 +283,15 @@ export async function POST(req: NextRequest) {
         }
 
         if (customer) {
+          const now = new Date().toISOString();
           batchStatements.push({
             sql: `UPDATE customers 
                   SET points = points - ? + ?,
                       spent = spent + ?,
-                      visits = visits + 1
+                      visits = visits + 1,
+                      updated_at = ?
                   WHERE id = ?`,
-            args: [redeemed, earned, total, customer.id]
+            args: [redeemed, earned, total, now, customer.id]
           });
         }
 
@@ -420,17 +422,40 @@ export async function POST(req: NextRequest) {
           db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?').run(qty, pid);
         }
 
+        let finalCustomerPoints = 0;
+        let finalCustomerSpent = 0;
+        let finalCustomerVisits = 0;
+        const now = new Date().toISOString();
+
         if (customer) {
+          finalCustomerPoints = Math.max(0, (customer.points || 0) - redeemed + earned);
+          finalCustomerSpent = (customer.spent || 0) + total;
+          finalCustomerVisits = (customer.visits || 0) + 1;
+
           db.prepare(`
             UPDATE customers 
-            SET points = points - ? + ?,
-                spent = spent + ?,
-                visits = visits + 1
+            SET points = ?,
+                spent = ?,
+                visits = ?,
+                updated_at = ?
             WHERE id = ?
-          `).run(redeemed, earned, total, customer.id);
+          `).run(finalCustomerPoints, finalCustomerSpent, finalCustomerVisits, now, customer.id);
         }
 
         db.exec('COMMIT');
+
+        // Immediately replicate to Turso Cloud so background sync never restores old points
+        if (customer) {
+          try {
+            const turso = getTursoClient();
+            await turso.execute({
+              sql: `UPDATE customers 
+                    SET points = ?, spent = ?, visits = ?, updated_at = ?
+                    WHERE id = ?`,
+              args: [finalCustomerPoints, finalCustomerSpent, finalCustomerVisits, now, customer.id]
+            });
+          } catch (cloudErr) {}
+        }
       } catch (err) {
         db.exec('ROLLBACK');
         throw err;
@@ -752,6 +777,7 @@ export async function POST(req: NextRequest) {
       const name = String(b.name || '').trim();
       const phone = String(b.phone || '').trim();
       const email = String(b.email || '').trim().toLowerCase();
+      const now = new Date().toISOString();
 
       if (!name || !phone) {
         return NextResponse.json({ error: 'Full Name and Mobile Phone Number are compulsory.' }, { status: 400 });
@@ -764,9 +790,9 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'A customer with this phone number already exists.' }, { status: 400 });
         }
         await turso.execute({
-          sql: `INSERT INTO customers(id, name, phone, email, points, spent, visits, created_at)
-                VALUES(?, ?, ?, ?, 0, 0, 0, ?)`,
-          args: [id, name, phone, email, new Date().toISOString()]
+          sql: `INSERT INTO customers(id, name, phone, email, points, spent, visits, created_at, updated_at)
+                VALUES(?, ?, ?, ?, 0, 0, 0, ?, ?)`,
+          args: [id, name, phone, email, now, now]
         });
         const custRes = await turso.execute({ sql: 'SELECT * FROM customers WHERE id=?', args: [id] });
         return NextResponse.json({ ok: true, customer: custRes.rows[0] });
@@ -779,17 +805,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'A customer with this phone number already exists.' }, { status: 400 });
       }
       db.prepare(`
-        INSERT INTO customers(id, name, phone, email, points, spent, visits, created_at)
-        VALUES(?, ?, ?, ?, 0, 0, 0, ?)
-      `).run(id, name, phone, email, new Date().toISOString());
+        INSERT INTO customers(id, name, phone, email, points, spent, visits, created_at, updated_at)
+        VALUES(?, ?, ?, ?, 0, 0, 0, ?, ?)
+      `).run(id, name, phone, email, now, now);
 
       // Replicate to Turso if online
       try {
         const turso = getTursoClient();
         await turso.execute({
-          sql: `INSERT INTO customers(id, name, phone, email, points, spent, visits, created_at)
-                VALUES(?, ?, ?, ?, 0, 0, 0, ?)`,
-          args: [id, name, phone, email, new Date().toISOString()]
+          sql: `INSERT INTO customers(id, name, phone, email, points, spent, visits, created_at, updated_at)
+                VALUES(?, ?, ?, ?, 0, 0, 0, ?, ?)`,
+          args: [id, name, phone, email, now, now]
         });
       } catch (cloudErr) {}
 
@@ -805,6 +831,7 @@ export async function POST(req: NextRequest) {
       const name = String(b.name || '').trim();
       const phone = String(b.phone || '').trim();
       const email = String(b.email || '').trim().toLowerCase();
+      const now = new Date().toISOString();
 
       if (!id || !name || !phone) {
         return NextResponse.json({ error: 'Full Name and Phone Number are compulsory.' }, { status: 400 });
@@ -813,8 +840,8 @@ export async function POST(req: NextRequest) {
       if (isCloud) {
         const turso = getTursoClient();
         await turso.execute({
-          sql: 'UPDATE customers SET name=?, phone=?, email=? WHERE id=?',
-          args: [name, phone, email, id]
+          sql: 'UPDATE customers SET name=?, phone=?, email=?, updated_at=? WHERE id=?',
+          args: [name, phone, email, now, id]
         });
         const custRes = await turso.execute({ sql: 'SELECT * FROM customers WHERE id=?', args: [id] });
         return NextResponse.json({ ok: true, customer: custRes.rows[0] });
@@ -822,13 +849,13 @@ export async function POST(req: NextRequest) {
 
       const { getDatabase } = await import('@/lib/db');
       const db = getDatabase();
-      db.prepare('UPDATE customers SET name=?, phone=?, email=? WHERE id=?').run(name, phone, email, id);
+      db.prepare('UPDATE customers SET name=?, phone=?, email=?, updated_at=? WHERE id=?').run(name, phone, email, now, id);
 
       try {
         const turso = getTursoClient();
         await turso.execute({
-          sql: 'UPDATE customers SET name=?, phone=?, email=? WHERE id=?',
-          args: [name, phone, email, id]
+          sql: 'UPDATE customers SET name=?, phone=?, email=?, updated_at=? WHERE id=?',
+          args: [name, phone, email, now, id]
         });
       } catch (cloudErr) {}
 
@@ -890,21 +917,22 @@ export async function POST(req: NextRequest) {
     if (b.action === 'update_customer_points') {
       const id = String(b.id);
       const points = Math.max(0, Math.floor(Number(b.points) || 0));
+      const now = new Date().toISOString();
 
       if (isCloud) {
         const turso = getTursoClient();
-        await turso.execute({ sql: 'UPDATE customers SET points=? WHERE id=?', args: [points, id] });
+        await turso.execute({ sql: 'UPDATE customers SET points=?, updated_at=? WHERE id=?', args: [points, now, id] });
         const custRes = await turso.execute({ sql: 'SELECT * FROM customers WHERE id=?', args: [id] });
         return NextResponse.json({ ok: true, customer: custRes.rows[0] });
       }
 
       const { getDatabase } = await import('@/lib/db');
       const db = getDatabase();
-      db.prepare('UPDATE customers SET points=? WHERE id=?').run(points, id);
+      db.prepare('UPDATE customers SET points=?, updated_at=? WHERE id=?').run(points, now, id);
 
       try {
         const turso = getTursoClient();
-        await turso.execute({ sql: 'UPDATE customers SET points=? WHERE id=?', args: [points, id] });
+        await turso.execute({ sql: 'UPDATE customers SET points=?, updated_at=? WHERE id=?', args: [points, now, id] });
       } catch (cloudErr) {}
 
       const customer = db.prepare('SELECT * FROM customers WHERE id=?').get(id);

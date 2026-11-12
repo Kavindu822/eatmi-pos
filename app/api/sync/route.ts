@@ -206,29 +206,73 @@ export async function POST() {
       if (!tc) {
         // Missing in Turso: Insert
         await turso.execute({
-          sql: `INSERT OR REPLACE INTO customers(id, name, phone, email, points, spent, visits, created_at)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
-          args: [lc.id, lc.name, lc.phone, lc.email || '', lc.points || 0, lc.spent || 0, lc.visits || 0, lc.created_at || '']
+          sql: `INSERT OR REPLACE INTO customers(id, name, phone, email, points, spent, visits, created_at, updated_at)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [lc.id, lc.name, lc.phone, lc.email || '', lc.points || 0, lc.spent || 0, lc.visits || 0, lc.created_at || '', lc.updated_at || '']
         });
       } else {
-        // Exists in both: Reconcile max points & stats
-        const mergedPoints = Math.max(Number(lc.points || 0), Number(tc.points || 0));
-        const mergedSpent = Math.max(Number(lc.spent || 0), Number(tc.spent || 0));
-        const mergedVisits = Math.max(Number(lc.visits || 0), Number(tc.visits || 0));
-        const name = lc.name || tc.name;
-        const email = lc.email || tc.email || '';
+        // Exists in both: Resolve based on updated_at timestamps
+        const localTime = lc.updated_at ? new Date(lc.updated_at).getTime() : (lc.created_at ? new Date(lc.created_at).getTime() : 0);
+        const tursoTime = tc.updated_at ? new Date(tc.updated_at).getTime() : (tc.created_at ? new Date(tc.created_at).getTime() : 0);
 
-        // Update Turso if local was higher
-        if (mergedPoints !== Number(tc.points) || mergedSpent !== Number(tc.spent) || mergedVisits !== Number(tc.visits)) {
+        let targetPoints = Number(lc.points || 0);
+        let targetSpent = Number(lc.spent || 0);
+        let targetVisits = Number(lc.visits || 0);
+        let targetName = lc.name || tc.name;
+        let targetEmail = lc.email !== undefined ? lc.email : (tc.email || '');
+        let targetUpdatedAt = lc.updated_at || tc.updated_at || '';
+
+        if (tursoTime > localTime) {
+          // Cloud was updated more recently
+          targetPoints = Number(tc.points || 0);
+          targetSpent = Number(tc.spent || 0);
+          targetVisits = Number(tc.visits || 0);
+          targetName = tc.name || lc.name;
+          targetEmail = tc.email !== undefined ? tc.email : (lc.email || '');
+          targetUpdatedAt = tc.updated_at;
+        } else if (localTime > tursoTime) {
+          // Local register was updated more recently (e.g. points redeemed or earned)
+          targetPoints = Number(lc.points || 0);
+          targetSpent = Number(lc.spent || 0);
+          targetVisits = Number(lc.visits || 0);
+          targetName = lc.name || tc.name;
+          targetEmail = lc.email !== undefined ? lc.email : (tc.email || '');
+          targetUpdatedAt = lc.updated_at;
+        } else {
+          // Equal or no timestamps: keep local points, maximum for lifetime stats
+          targetPoints = Number(lc.points ?? tc.points ?? 0);
+          targetSpent = Math.max(Number(lc.spent || 0), Number(tc.spent || 0));
+          targetVisits = Math.max(Number(lc.visits || 0), Number(tc.visits || 0));
+        }
+
+        // Update Turso if different
+        if (
+          targetPoints !== Number(tc.points) ||
+          targetSpent !== Number(tc.spent) ||
+          targetVisits !== Number(tc.visits) ||
+          targetName !== tc.name ||
+          targetEmail !== tc.email ||
+          targetUpdatedAt !== tc.updated_at
+        ) {
           await turso.execute({
-            sql: 'UPDATE customers SET points=?, spent=?, visits=?, name=?, email=? WHERE id=?',
-            args: [mergedPoints, mergedSpent, mergedVisits, name, email, tc.id]
+            sql: 'UPDATE customers SET points=?, spent=?, visits=?, name=?, email=?, updated_at=? WHERE id=?',
+            args: [targetPoints, targetSpent, targetVisits, targetName, targetEmail, targetUpdatedAt, tc.id]
           });
         }
-        // Update Local SQLite
-        db.prepare(`
-          UPDATE customers SET points=?, spent=?, visits=?, name=?, email=? WHERE id=?
-        `).run(mergedPoints, mergedSpent, mergedVisits, name, email, lc.id);
+
+        // Update Local SQLite if different
+        if (
+          targetPoints !== Number(lc.points) ||
+          targetSpent !== Number(lc.spent) ||
+          targetVisits !== Number(lc.visits) ||
+          targetName !== lc.name ||
+          targetEmail !== lc.email ||
+          targetUpdatedAt !== lc.updated_at
+        ) {
+          db.prepare(`
+            UPDATE customers SET points=?, spent=?, visits=?, name=?, email=?, updated_at=? WHERE id=?
+          `).run(targetPoints, targetSpent, targetVisits, targetName, targetEmail, targetUpdatedAt, lc.id);
+        }
       }
     }
 
@@ -236,8 +280,8 @@ export async function POST() {
     for (const tc of tursoCustomers) {
       if (!localCustByPhone.has(String(tc.phone))) {
         db.prepare(`
-          INSERT INTO customers(id, name, phone, email, points, spent, visits, created_at)
-          VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO customers(id, name, phone, email, points, spent, visits, created_at, updated_at)
+          VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           String(tc.id),
           String(tc.name),
@@ -246,7 +290,8 @@ export async function POST() {
           Number(tc.points || 0),
           Number(tc.spent || 0),
           Number(tc.visits || 0),
-          String(tc.created_at || '')
+          String(tc.created_at || ''),
+          String(tc.updated_at || '')
         );
       }
     }

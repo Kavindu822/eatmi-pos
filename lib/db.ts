@@ -85,6 +85,7 @@ export function getDatabase(): DatabaseSync {
   ensureColumn('products', 'cost', "INTEGER DEFAULT 0");
   ensureColumn('products', 'is_active', "INTEGER DEFAULT 1");
   ensureColumn('customers', 'created_at', "TEXT DEFAULT ''");
+  ensureColumn('customers', 'updated_at', "TEXT DEFAULT ''");
 
   // 4. Initialize Sales Table
   _db.exec(`
