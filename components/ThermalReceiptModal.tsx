@@ -645,7 +645,7 @@ export default function ThermalReceiptModal({
                     <img
                       src="/receipt-logo.png"
                       alt="Logo"
-                      className="receipt-logo w-10 h-auto max-h-12 mx-auto mb-1 object-contain"
+                      className="receipt-logo w-14 h-auto max-h-16 mx-auto mb-1.5 object-contain filter grayscale contrast-200"
                     />
                   )}
                   <h2 className="font-bold text-sm uppercase tracking-wide text-black">

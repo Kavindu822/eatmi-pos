@@ -1830,7 +1830,7 @@ export default function OwnerPortal({
                               <img
                                 src="/receipt-logo.png"
                                 alt="Receipt Logo"
-                                className="receipt-logo w-10 h-auto max-h-12 mx-auto mb-1 object-contain filter grayscale contrast-200"
+                                className="receipt-logo w-14 h-auto max-h-16 mx-auto mb-1.5 object-contain filter grayscale contrast-200"
                               />
                             )}
                             <div className="font-bold text-xs uppercase tracking-wide text-black">{receiptStoreName}</div>

@@ -47,6 +47,7 @@ export function generateReceiptHtml({
   const baseFontSize = is80 ? (fontSizeSetting === 'large' ? '12px' : '11px') : '9.5px';
   const headFontSize = is80 ? '14.5px' : '12px';
   const totalFontSize = is80 ? '14.5px' : '12.5px';
+  const logoWidth = is80 ? '68px' : '52px';
 
   const fontFamily = fontStyle === 'mono'
     ? `'Courier New', Courier, monospace`
@@ -320,10 +321,16 @@ export function generateReceiptHtml({
       line-height: 1.35;
     }
     img.logo {
-      max-width: 44px;
-      max-height: 44px;
+      width: ${logoWidth};
+      max-width: ${logoWidth};
+      height: auto;
       display: block;
       margin: 0 auto 3px auto;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      filter: contrast(200%) grayscale(100%);
     }
   </style>
 </head>
