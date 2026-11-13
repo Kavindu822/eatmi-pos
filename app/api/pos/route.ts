@@ -1260,6 +1260,70 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, rate, message: `Loyalty rule updated: Every Rs. ${rate} spent earns 1 reward point.` });
     }
 
+    // =============================================================
+    // 17. ACTION: clear_all_sales (Reset Test Transactions)
+    // =============================================================
+    if (b.action === 'clear_all_sales') {
+      const enteredPin = String(b.pin || '').trim();
+
+      // Verify Owner PIN or Master Key
+      let validPin = '1234';
+      let masterKey = 'EATMI-8899';
+      if (isCloud) {
+        const turso = getTursoClient();
+        const pinRes = await turso.execute("SELECT key, value FROM settings WHERE key IN ('owner_pin', 'master_recovery_key')");
+        for (const row of pinRes.rows) {
+          if (row.key === 'owner_pin') validPin = String(row.value || '1234');
+          if (row.key === 'master_recovery_key') masterKey = String(row.value || 'EATMI-8899');
+        }
+      } else {
+        const { getDatabase } = await import('@/lib/db');
+        const db = getDatabase();
+        const pinRow = db.prepare("SELECT value FROM settings WHERE key='owner_pin'").get() as any;
+        const keyRow = db.prepare("SELECT value FROM settings WHERE key='master_recovery_key'").get() as any;
+        if (pinRow?.value) validPin = pinRow.value;
+        if (keyRow?.value) masterKey = keyRow.value;
+      }
+
+      if (enteredPin !== validPin && enteredPin !== masterKey) {
+        return NextResponse.json({ ok: false, error: 'Incorrect Owner PIN. Please enter your valid 4-digit PIN (default: 1234).' }, { status: 401 });
+      }
+
+      const resetCustomers = Boolean(b.resetCustomers !== false);
+      const now = new Date().toISOString();
+
+      // Wipe from local SQLite
+      try {
+        const { getDatabase } = await import('@/lib/db');
+        const db = getDatabase();
+        db.prepare('DELETE FROM sales').run();
+        if (resetCustomers) {
+          db.prepare('UPDATE customers SET points = 0, spent = 0, visits = 0, updated_at = ?').run(now);
+        }
+      } catch (e) {
+        // Local SQLite might not exist in cloud environment
+      }
+
+      // Wipe from Turso Cloud
+      try {
+        const turso = getTursoClient();
+        await turso.execute('DELETE FROM sales');
+        if (resetCustomers) {
+          await turso.execute({
+            sql: 'UPDATE customers SET points = 0, spent = 0, visits = 0, updated_at = ?',
+            args: [now]
+          });
+        }
+      } catch (cloudErr) {
+        console.warn('Could not wipe sales on Turso Cloud:', cloudErr);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        message: 'All test sales records have been cleared from both Local PC and Cloud databases! Sales history has been reset to Rs. 0.00.'
+      });
+    }
+
     return NextResponse.json({ error: 'Unknown action requested' }, { status: 400 });
   } catch (error: any) {
     console.error('POS POST Error:', error);
