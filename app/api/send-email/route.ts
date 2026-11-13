@@ -39,15 +39,35 @@ export async function POST(req: NextRequest) {
     const isGmail = smtpHost.toLowerCase().includes('gmail') || smtpUser.toLowerCase().endsWith('@gmail.com');
 
     const getTransporter = () => {
+      // If port 587 is specified for Gmail, use explicit host/port STARTTLS with TLS rejection disabled
+      if (isGmail && smtpPort === 587) {
+        return nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass
+          },
+          tls: {
+            rejectUnauthorized: false
+          }
+        });
+      }
+
       if (isGmail) {
         return nodemailer.createTransport({
           service: 'gmail',
           auth: {
             user: smtpUser,
             pass: smtpPass
+          },
+          tls: {
+            rejectUnauthorized: false
           }
         });
       }
+
       return nodemailer.createTransport({
         host: smtpHost || 'smtp.gmail.com',
         port: smtpPort,
@@ -438,6 +458,8 @@ export async function POST(req: NextRequest) {
       errMsg = 'SMTP Authentication failed. For Gmail, you must use a 16-character Google App Password (not your standard password). Enable 2-Step Verification in Google Account -> Security -> App Passwords.';
     } else if (errMsg.includes('ENOTFOUND') || errMsg.includes('ETIMEDOUT') || errMsg.includes('ECONNREFUSED')) {
       errMsg = 'Could not connect to SMTP server host/port. Please check your internet connection and SMTP host/port.';
+    } else if (errMsg.includes('self-signed certificate') || errMsg.includes('SELF_SIGNED_CERT_IN_CHAIN')) {
+      errMsg = 'SSL Certificate Error: An Antivirus (e.g. Avast, AVG, Kaspersky, ESET) or network firewall is intercepting the email connection.';
     }
     return NextResponse.json({
       ok: false,
