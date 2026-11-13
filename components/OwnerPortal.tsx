@@ -56,7 +56,6 @@ import ProductModal from './ProductModal';
 import CustomerPointsModal from './CustomerPointsModal';
 import EditCustomerModal from './EditCustomerModal';
 import NewCustomerModal from './NewCustomerModal';
-import ResetSalesModal from './ResetSalesModal';
 
 interface OwnerPortalProps {
   categories: Category[];
@@ -169,7 +168,6 @@ export default function OwnerPortal({
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [newCustomerModalOpen, setNewCustomerModalOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
-  const [resetSalesModalOpen, setResetSalesModalOpen] = useState(false);
 
   // Reports & Financial Settlements State (Daily & Historical Old Days)
   const [reportFilterMode, setReportFilterMode] = useState<'today' | 'yesterday' | '7days' | 'month' | 'all' | 'custom_date' | 'custom_range'>('today');
@@ -1667,29 +1665,17 @@ export default function OwnerPortal({
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setResetSalesModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-300 hover:bg-rose-50 text-rose-700 text-xs font-semibold shadow-xs transition"
-                    title="Wipe test transactions and reset sales revenue to Rs. 0.00"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                    <span>Reset Test Records</span>
-                  </button>
-
-                  {/* Print Z-Report for Active Period */}
-                  <button
-                    type="button"
-                    onClick={() => handlePrintZReport(filteredReportSales)}
-                    disabled={filteredReportSales.length === 0}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
-                    title="Print official ESC/POS Z-Report slip for this period"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Print Z-Report</span>
-                  </button>
-                </div>
+                {/* Print Z-Report for Active Period */}
+                <button
+                  type="button"
+                  onClick={() => handlePrintZReport(filteredReportSales)}
+                  disabled={filteredReportSales.length === 0}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
+                  title="Print official ESC/POS Z-Report slip for this period"
+                >
+                  <Printer className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Print Z-Report</span>
+                </button>
               </div>
 
               {/* Date Filter Presets */}
@@ -1788,16 +1774,6 @@ export default function OwnerPortal({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setResetSalesModalOpen(true)}
-                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-rose-300 hover:bg-rose-50 text-rose-700 text-xs font-semibold shadow-xs transition"
-                        title="Wipe test transactions and reset sales revenue to Rs. 0.00"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                        <span>Reset Test Records</span>
-                      </button>
-
                       <button
                         type="button"
                         onClick={() => handlePrintZReport(filteredReportSales)}
@@ -3171,12 +3147,6 @@ export default function OwnerPortal({
         onCustomerCreated={async () => {
           await onRefreshData();
         }}
-      />
-
-      <ResetSalesModal
-        isOpen={resetSalesModalOpen}
-        onClose={() => setResetSalesModalOpen(false)}
-        onResetComplete={onRefreshData}
       />
     </div>
   );
