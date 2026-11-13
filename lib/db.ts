@@ -286,6 +286,14 @@ export function getDatabase(): DatabaseSync {
       AND (sku LIKE 'CAK-%' OR category LIKE '%Cake%' OR category LIKE '%Tart%')
   `).run();
 
+  // Reconnect products to their proper category if category_id is missing but category name matches
+  _db.prepare(`
+    UPDATE products
+    SET category_id = (SELECT id FROM categories WHERE categories.name = products.category LIMIT 1)
+    WHERE (category_id = '' OR category_id IS NULL OR category_id NOT IN (SELECT id FROM categories))
+      AND category IN (SELECT name FROM categories)
+  `).run();
+
   // If any other orphaned product remains, assign to first available category
   const firstCat = _db.prepare('SELECT id, name FROM categories ORDER BY display_order ASC LIMIT 1').get() as any;
   if (firstCat) {
@@ -293,6 +301,7 @@ export function getDatabase(): DatabaseSync {
       UPDATE products
       SET category_id = ?, category = ?
       WHERE category_id = '' OR category_id IS NULL OR category_id NOT IN (SELECT id FROM categories)
+      AND (category = '' OR category IS NULL OR category NOT IN (SELECT name FROM categories))
     `).run(firstCat.id, firstCat.name);
   }
 

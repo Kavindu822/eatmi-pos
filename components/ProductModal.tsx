@@ -46,7 +46,8 @@ export default function ProductModal({
       if (product) {
         setName(product.name || '');
         setSku(product.sku || '');
-        setCategoryId(product.category_id || defaultCategoryId || categories[0]?.id || '');
+        const matchingCat = categories.find(c => c.id === product.category_id || c.name.toLowerCase() === (product.category || '').toLowerCase());
+        setCategoryId(matchingCat?.id || product.category_id || defaultCategoryId || categories[0]?.id || '');
         setPriceRupees(centsToRupees(product.price));
         setCostRupees(product.cost ? centsToRupees(product.cost) : 0);
         setStock(product.stock ?? 0);
