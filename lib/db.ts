@@ -146,8 +146,8 @@ export function getDatabase(): DatabaseSync {
   ensureSetting('owner_pin', '1234');
   ensureSetting('master_recovery_key', 'EATMI-8899');
   ensureSetting('owner_recovery_phone', '');
-  ensureSetting('receipt_store_name', 'EATmi BAKERY & CAFE');
-  ensureSetting('receipt_tagline', 'ARTISAN PÂTISSERIE & ROASTERY');
+  ensureSetting('receipt_store_name', 'EATmi');
+  ensureSetting('receipt_tagline', '');
   ensureSetting('receipt_address', 'No. 07, Eugine Balasuriya Mawatha, Nupe, Matara');
   ensureSetting('receipt_phone', '0740546060');
   ensureSetting('receipt_header_note', 'TAX INVOICE / RECEIPT');
@@ -166,7 +166,7 @@ export function getDatabase(): DatabaseSync {
   ensureSetting('smtp_port', '587');
   ensureSetting('smtp_user', '');
   ensureSetting('smtp_pass', '');
-  ensureSetting('smtp_from_name', 'EATmi BAKERY & CAFE');
+  ensureSetting('smtp_from_name', 'EATmi');
   ensureSetting('smtp_secure', 'false');
 
   // 6. Ensure Default Categories Exist

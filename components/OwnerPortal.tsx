@@ -83,8 +83,8 @@ export default function OwnerPortal({
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Receipt & Printer Settings State
-  const [receiptStoreName, setReceiptStoreName] = useState(settings.receipt_store_name || 'EATmi BAKERY & CAFE');
-  const [receiptTagline, setReceiptTagline] = useState(settings.receipt_tagline || 'ARTISAN PÂTISSERIE & ROASTERY');
+  const [receiptStoreName, setReceiptStoreName] = useState(settings.receipt_store_name || 'EATmi');
+  const [receiptTagline, setReceiptTagline] = useState(settings.receipt_tagline || '');
   const [receiptAddress, setReceiptAddress] = useState(settings.receipt_address || 'No. 07, Eugine Balasuriya Mawatha, Nupe, Matara');
   const [receiptPhone, setReceiptPhone] = useState(settings.receipt_phone || '0740546060');
   const [receiptHeaderNote, setReceiptHeaderNote] = useState(settings.receipt_header_note || 'TAX INVOICE / RECEIPT');
@@ -114,7 +114,7 @@ export default function OwnerPortal({
   const [smtpUser, setSmtpUser] = useState(settings.smtp_user || '');
   const [smtpPass, setSmtpPass] = useState(settings.smtp_pass || '');
   const [showSmtpPass, setShowSmtpPass] = useState(false);
-  const [smtpFromName, setSmtpFromName] = useState(settings.smtp_from_name || 'EATmi BAKERY & CAFE');
+  const [smtpFromName, setSmtpFromName] = useState(settings.smtp_from_name || 'EATmi');
   const [smtpSecure, setSmtpSecure] = useState(settings.smtp_secure === 'true');
   const [emailSettingsMessage, setEmailSettingsMessage] = useState('');
   const [isSavingEmailSettings, setIsSavingEmailSettings] = useState(false);
@@ -1027,7 +1027,7 @@ export default function OwnerPortal({
                             {items.map(it => `${it.qty}x ${it.name}`).join(', ')}
                           </div>
                           <div className="text-[10px] text-stone-400 mt-0.5">
-                            Patron: <span className="font-medium text-stone-700">{sale.customer_name}</span>
+                            Customer: <span className="font-medium text-stone-700">{sale.customer_name}</span>
                             {sale.earned > 0 && (
                               <span className="text-emerald-700 font-semibold ml-2">
                                 (+{sale.earned} loyalty pts)
@@ -2321,7 +2321,7 @@ export default function OwnerPortal({
                       type="text"
                       value={receiptStoreName}
                       onChange={e => setReceiptStoreName(e.target.value)}
-                      placeholder="e.g. EATmi BAKERY & CAFE"
+                      placeholder="e.g. EATmi"
                       className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-bold uppercase focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
@@ -2334,7 +2334,7 @@ export default function OwnerPortal({
                       type="text"
                       value={receiptTagline}
                       onChange={e => setReceiptTagline(e.target.value)}
-                      placeholder="e.g. ARTISAN PÂTISSERIE & ROASTERY"
+                      placeholder="Optional tagline (leave empty to hide)"
                       className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs uppercase focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
@@ -2406,7 +2406,7 @@ export default function OwnerPortal({
                     <label className="flex items-center justify-between p-2 rounded-xl hover:bg-stone-50 cursor-pointer">
                       <div>
                         <span className="text-xs font-semibold text-stone-800">
-                          Show Sweet Rewards Loyalty Box
+                          Show EAT Rewards Loyalty Box
                         </span>
                         <p className="text-[10px] text-stone-400">
                           Prints "Rs. {loyaltyRate} = 1 pt" earned points and current customer balance
@@ -2558,7 +2558,7 @@ export default function OwnerPortal({
                               <span className="font-semibold uppercase">TAKEAWAY</span>
                             </div>
                             <div className="flex justify-between font-semibold text-black">
-                              <span>Patron:</span>
+                              <span>Customer:</span>
                               <span>Kavindu Anajana</span>
                             </div>
                           </div>
@@ -2613,14 +2613,14 @@ export default function OwnerPortal({
                           {receiptShowLoyalty && (
                             <div className="border border-dashed border-stone-400 p-1.5 my-1 text-[9px] text-stone-800 space-y-0.5">
                               <div className="text-center font-semibold uppercase text-[8.5px] border-b border-dashed border-stone-300 pb-0.5">
-                                *** SWEET REWARDS (Rs. {loyaltyRate} = 1 pt) ***
+                                *** EAT REWARDS (Rs. {loyaltyRate} = 1 pt) ***
                               </div>
                               <div className="flex justify-between font-semibold">
                                 <span>Points Earned:</span>
                                 <span className="font-mono">+{Math.floor(2940 / loyaltyRate)} pts</span>
                               </div>
                               <div className="flex justify-between font-semibold border-t border-dashed border-stone-300 pt-0.5">
-                                <span>New Patron Balance:</span>
+                                <span>New Customer Balance:</span>
                                 <span className="font-mono">24 points</span>
                               </div>
                             </div>
@@ -2640,7 +2640,7 @@ export default function OwnerPortal({
                           </div>
                           <div className="py-0.5 text-[9.5px] flex justify-between border-b border-dashed border-stone-300">
                             <span>Order: #SAMPLE-1001</span>
-                            <span>Worker 1</span>
+                            <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                           <div className="py-1 border-b border-black space-y-1">
                             <div className="flex gap-2 text-xs">
@@ -2915,7 +2915,7 @@ export default function OwnerPortal({
                       type="text"
                       value={smtpFromName}
                       onChange={e => setSmtpFromName(e.target.value)}
-                      placeholder="e.g. EATmi BAKERY & CAFE"
+                      placeholder="e.g. EATmi"
                       className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                     />
                   </div>

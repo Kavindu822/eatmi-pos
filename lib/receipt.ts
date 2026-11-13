@@ -33,8 +33,8 @@ export function generateReceiptHtml({
   const showLoyalty = settings.receipt_show_loyalty !== 'false';
   const showBarcode = settings.receipt_show_barcode === 'true';
 
-  const storeName = settings.receipt_store_name || 'EATmi BAKERY & CAFE';
-  const tagline = settings.receipt_tagline || 'ARTISAN PÂTISSERIE & ROASTERY';
+  const storeName = settings.receipt_store_name || 'EATmi';
+  const tagline = settings.receipt_tagline || '';
   const address = settings.receipt_address || 'No. 07, Eugine Balasuriya Mawatha, Nupe, Matara';
   const phone = settings.receipt_phone || '0740546060';
   const headerNote = settings.receipt_header_note || 'TAX INVOICE / RECEIPT';
@@ -135,7 +135,6 @@ export function generateReceiptHtml({
       <span>${formattedDate}</span>
     </div>
     <div class="kot-meta">
-      <span>Cashier: ${sale.cashier || 'Worker 1'}</span>
       <span>Items: <b>${items.reduce((acc, it) => acc + (it.qty || 1), 0)} pcs</b></span>
     </div>
 
@@ -355,18 +354,14 @@ export function generateReceiptHtml({
       <span>${formattedDate}</span>
     </div>
     <div class="meta-row">
-      <span>Cashier:</span>
-      <span>${sale.cashier || 'Cashier 1'}</span>
-    </div>
-    <div class="meta-row">
       <span>Order Mode:</span>
       <span style="font-weight: 600; text-transform: uppercase;">
         ${sale.order_type} ${sale.table_no ? `(${sale.table_no})` : ''}
       </span>
     </div>
-    ${sale.customer_name && sale.customer_name !== 'Walk-in Patron' ? `
+    ${sale.customer_name && sale.customer_name !== 'Walk-in Patron' && sale.customer_name !== 'Walk-in Customer' ? `
       <div class="meta-row" style="font-weight: 600; padding-top: 1px;">
-        <span>Patron:</span>
+        <span>Customer:</span>
         <span>${sale.customer_name}</span>
       </div>
     ` : ''}
@@ -430,7 +425,7 @@ export function generateReceiptHtml({
 
     ${showLoyalty ? `
       <div class="rewards-box">
-        <div class="rewards-header">*** SWEET REWARDS (Rs. ${loyaltyRate} = 1 pt) ***</div>
+        <div class="rewards-header">*** EAT REWARDS (Rs. ${loyaltyRate} = 1 pt) ***</div>
         ${sale.earned > 0 ? `
           <div style="display: flex; justify-content: space-between; font-weight: 600;">
             <span>Points Earned on this bill:</span>
@@ -450,7 +445,7 @@ export function generateReceiptHtml({
         ` : ''}
         ${customerPointsBalance !== undefined ? `
           <div style="display: flex; justify-content: space-between; font-weight: 600; border-top: 1px dashed #888888; margin-top: 2px; padding-top: 2px;">
-            <span>New Patron Balance:</span>
+            <span>New Customer Balance:</span>
             <span style="font-family: monospace;">${customerPointsBalance} points</span>
           </div>
         ` : ''}
@@ -477,8 +472,8 @@ export function generateZReportHtml({
   sales,
   settings = {}
 }: ZReportOptions): string {
-  const storeName = settings.receipt_store_name || 'EATmi BAKERY & CAFE';
-  const tagline = settings.receipt_tagline || 'ARTISAN PÂTISSERIE & ROASTERY';
+  const storeName = settings.receipt_store_name || 'EATmi';
+  const tagline = settings.receipt_tagline || '';
   const address = settings.receipt_address || 'No. 07, Eugine Balasuriya Mawatha, Nupe, Matara';
   const phone = settings.receipt_phone || '0740546060';
   const paperWidth = settings.receipt_paper_width || '80mm';

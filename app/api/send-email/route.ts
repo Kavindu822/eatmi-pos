@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const smtpPort = Number(body.smtp_port || settings.smtp_port) || 587;
     const smtpUser = String(body.smtp_user || settings.smtp_user || '').trim();
     const smtpPass = String(body.smtp_pass || settings.smtp_pass || '').trim().replace(/\s+/g, '');
-    const smtpFromName = body.smtp_from_name || settings.smtp_from_name || settings.receipt_store_name || 'EATmi BAKERY & CAFE';
+    const smtpFromName = body.smtp_from_name || settings.smtp_from_name || settings.receipt_store_name || 'EATmi';
     const smtpSecure = body.smtp_secure !== undefined ? (body.smtp_secure === 'true' || body.smtp_secure === true) : (settings.smtp_secure === 'true' || smtpPort === 465);
 
     const isGmail = smtpHost.toLowerCase().includes('gmail') || smtpUser.toLowerCase().endsWith('@gmail.com');
@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
       });
     };
 
-    const storeName = settings.receipt_store_name || 'EATmi BAKERY & CAFE';
-    const tagline = settings.receipt_tagline || 'ARTISAN PÂTISSERIE & ROASTERY';
+    const storeName = settings.receipt_store_name || 'EATmi';
+    const tagline = settings.receipt_tagline || '';
     const address = settings.receipt_address || 'No. 07, Eugine Balasuriya Mawatha, Nupe, Matara';
     const phone = settings.receipt_phone || '0740546060';
     const loyaltyRate = Math.max(1, Number(settings.loyalty_rate_rupees) || 300);
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
     const plainLines: string[] = [
       '==========================================',
       storeName,
-      tagline,
+      ...(tagline ? [tagline] : []),
       address,
       `Tel: ${phone}`,
       'TAX INVOICE / RECEIPT',
@@ -203,8 +203,7 @@ export async function POST(req: NextRequest) {
       `Receipt No:  ${sale.id}`,
       `Date & Time: ${formattedDate}`,
       `Order Mode:  ${(sale.order_type || 'takeaway').toUpperCase()}`,
-      `Patron:      ${sale.customer_name || 'Walk-in Guest'}`,
-      `Cashier:     ${sale.cashier || 'Worker 1'}`,
+      `Customer:    ${sale.customer_name || 'Walk-in Customer'}`,
       '------------------------------------------',
       'ITEMS ORDERED:'
     ];
@@ -228,14 +227,14 @@ export async function POST(req: NextRequest) {
 
     if (settings.receipt_show_loyalty !== 'false') {
       plainLines.push('------------------------------------------');
-      plainLines.push(`*** SWEET REWARDS (Rs. ${loyaltyRate} = 1 pt) ***`);
+      plainLines.push(`*** EAT REWARDS (Rs. ${loyaltyRate} = 1 pt) ***`);
       if (sale.earned > 0) {
         plainLines.push(`Points Earned on this bill: +${sale.earned} pts`);
       } else {
         plainLines.push(`Points Earned: 0 pts (Spend Rs. ${loyaltyRate}+ to earn)`);
       }
       if (customerPointsBalance !== undefined) {
-        plainLines.push(`New Patron Balance: ${customerPointsBalance} points`);
+        plainLines.push(`New Customer Balance: ${customerPointsBalance} points`);
       }
     }
 
@@ -292,9 +291,13 @@ export async function POST(req: NextRequest) {
             <h1 style="margin: 0; font-size: 20px; letter-spacing: 1px; text-transform: uppercase; color: #f59e0b;">
               ${storeName}
             </h1>
-            <p style="margin: 6px 0 0 0; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #d6d3d1;">
+            ${
+              tagline
+                ? `<p style="margin: 6px 0 0 0; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #d6d3d1;">
               ${tagline}
-            </p>
+            </p>`
+                : ''
+            }
             <p style="margin: 4px 0 0 0; font-size: 11px; color: #a8a29e;">
               ${address} · Tel: ${phone}
             </p>
@@ -319,7 +322,7 @@ export async function POST(req: NextRequest) {
                 <td style="padding: 3px 0; text-align: right; font-weight: bold; text-transform: uppercase;">${(sale.order_type || 'takeaway').toUpperCase()}</td>
               </tr>
               <tr>
-                <td style="padding: 3px 0; color: #78716c;">Patron Name:</td>
+                <td style="padding: 3px 0; color: #78716c;">Customer Name:</td>
                 <td style="padding: 3px 0; text-align: right; font-weight: bold; color: #1c1917;">${sale.customer_name || 'Valued Guest'}</td>
               </tr>
             </table>
@@ -369,13 +372,13 @@ export async function POST(req: NextRequest) {
             </table>
           </div>
 
-          <!-- Sweet Rewards Loyalty Program Box -->
+          <!-- Eat Rewards Loyalty Program Box -->
           ${
             settings.receipt_show_loyalty !== 'false'
               ? `
             <div style="margin: 16px 20px; padding: 14px; background-color: #fef3c7; border: 1px dashed #d97706; border-radius: 12px; font-size: 12px;">
               <div style="text-align: center; font-weight: bold; color: #92400e; font-size: 11px; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px;">
-                *** SWEET REWARDS (Rs. ${loyaltyRate} = 1 pt) ***
+                *** EAT REWARDS (Rs. ${loyaltyRate} = 1 pt) ***
               </div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 3px; color: #78350f;">
                 <span>Points Earned on this Bill:</span>
@@ -405,7 +408,7 @@ export async function POST(req: NextRequest) {
               ${settings.receipt_footer_2 || 'Fresh bakes served with passion daily.'}
             </p>
             <p style="margin: 0; font-size: 10px; color: #a8a29e;">
-              This is an official computer-generated electronic receipt issued by EATmi Bakery & Cafe.<br />
+              This is an official computer-generated electronic receipt issued by ${storeName}.<br />
               No. 07, Eugine Balasuriya Mawatha, Nupe, Matara · Tel: 0740546060
             </p>
           </div>

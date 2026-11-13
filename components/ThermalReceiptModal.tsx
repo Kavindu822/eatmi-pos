@@ -130,8 +130,8 @@ export default function ThermalReceiptModal({
     timeStyle: 'short'
   });
 
-  const storeName = settings?.receipt_store_name || 'EATmi BAKERY & CAFE';
-  const tagline = settings?.receipt_tagline || 'ARTISAN PÂTISSERIE & ROASTERY';
+  const storeName = settings?.receipt_store_name || 'EATmi';
+  const tagline = settings?.receipt_tagline || '';
   const address = settings?.receipt_address || 'No. 07, Eugine Balasuriya Mawatha, Nupe, Matara';
   const phone = settings?.receipt_phone || '0740546060';
   const headerNote = settings?.receipt_header_note || 'TAX INVOICE / RECEIPT';
@@ -149,7 +149,7 @@ export default function ThermalReceiptModal({
     const lines = [
       doubleDivider,
       storeName,
-      tagline,
+      ...(tagline ? [tagline] : []),
       address,
       `Tel: ${phone}`,
       'TAX INVOICE / RECEIPT',
@@ -157,8 +157,7 @@ export default function ThermalReceiptModal({
       `Receipt No:  ${sale.id}`,
       `Date & Time: ${formattedDate}`,
       `Order Mode:  ${(sale.order_type || 'takeaway').toUpperCase()}`,
-      `Patron:      ${sale.customer_name || 'Walk-in Guest'}`,
-      `Cashier:     ${sale.cashier || 'Worker 1'}`,
+      `Customer:    ${sale.customer_name || 'Walk-in Customer'}`,
       divider,
       'ITEMS ORDERED:',
       divider
@@ -185,14 +184,14 @@ export default function ThermalReceiptModal({
 
     if (showLoyaltyBox) {
       lines.push(divider);
-      lines.push(`*** SWEET REWARDS (Rs. ${loyaltyRate} = 1 pt) ***`);
+      lines.push(`*** EAT REWARDS (Rs. ${loyaltyRate} = 1 pt) ***`);
       if (sale.earned > 0) {
         lines.push(`Points Earned on this bill: +${sale.earned} pts`);
       } else {
         lines.push(`Points Earned: 0 pts (Spend Rs. ${loyaltyRate}+ to earn)`);
       }
       if (customerPointsBalance !== undefined) {
-        lines.push(`New Patron Balance: ${customerPointsBalance} points`);
+        lines.push(`New Customer Balance: ${customerPointsBalance} points`);
       }
     }
 
@@ -445,8 +444,8 @@ export default function ThermalReceiptModal({
               {/* Patron & Order Overview */}
               <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 text-xs space-y-1.5">
                 <div className="flex justify-between">
-                  <span className="text-stone-500 font-medium">Patron:</span>
-                  <span className="font-bold text-stone-900">{sale.customer_name || 'Walk-in Guest'}</span>
+                  <span className="text-stone-500 font-medium">Customer:</span>
+                  <span className="font-bold text-stone-900">{sale.customer_name || 'Walk-in Customer'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-stone-500 font-medium">Receipt No:</span>
@@ -679,18 +678,14 @@ export default function ThermalReceiptModal({
                     <span>{formattedDate}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Cashier:</span>
-                    <span>{sale.cashier || 'Cashier 1'}</span>
-                  </div>
-                  <div className="flex justify-between">
                     <span>Order Mode:</span>
                     <span className="font-semibold uppercase">
                       {sale.order_type} {sale.table_no ? `(${sale.table_no})` : ''}
                     </span>
                   </div>
-                  {sale.customer_name && sale.customer_name !== 'Walk-in Patron' && (
+                  {sale.customer_name && sale.customer_name !== 'Walk-in Patron' && sale.customer_name !== 'Walk-in Customer' && (
                     <div className="flex justify-between font-semibold text-black pt-0.5">
-                      <span>Patron:</span>
+                      <span>Customer:</span>
                       <span>{sale.customer_name}</span>
                     </div>
                   )}
@@ -771,7 +766,7 @@ export default function ThermalReceiptModal({
                 {showLoyaltyBox && (
                   <div className="border border-dashed border-stone-400 p-2 my-2 text-xs text-stone-800 space-y-0.5">
                     <div className="text-center font-semibold uppercase text-[9.5px] tracking-wide pb-0.5 border-b border-dashed border-stone-300">
-                      *** SWEET REWARDS (Rs. {loyaltyRate} = 1 pt) ***
+                      *** EAT REWARDS (Rs. {loyaltyRate} = 1 pt) ***
                     </div>
                     {sale.earned > 0 ? (
                       <div className="flex justify-between font-semibold text-[11px] pt-0.5">
@@ -792,7 +787,7 @@ export default function ThermalReceiptModal({
                     )}
                     {customerPointsBalance !== undefined && (
                       <div className="flex justify-between font-semibold text-xs pt-0.5 border-t border-dashed border-stone-300">
-                        <span>New Patron Balance:</span>
+                        <span>New Customer Balance:</span>
                         <span className="font-mono">{customerPointsBalance} points</span>
                       </div>
                     )}
