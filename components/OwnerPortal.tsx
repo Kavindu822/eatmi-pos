@@ -56,6 +56,7 @@ import ProductModal from './ProductModal';
 import CustomerPointsModal from './CustomerPointsModal';
 import EditCustomerModal from './EditCustomerModal';
 import NewCustomerModal from './NewCustomerModal';
+import DeleteSaleModal from './DeleteSaleModal';
 
 interface OwnerPortalProps {
   categories: Category[];
@@ -168,6 +169,7 @@ export default function OwnerPortal({
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [newCustomerModalOpen, setNewCustomerModalOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
+  const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
 
   // Reports & Financial Settlements State (Daily & Historical Old Days)
   const [reportFilterMode, setReportFilterMode] = useState<'today' | 'yesterday' | '7days' | 'month' | 'all' | 'custom_date' | 'custom_range'>('today');
@@ -1036,19 +1038,30 @@ export default function OwnerPortal({
                           </div>
                         </div>
 
-                        <div className="text-right flex-shrink-0">
-                          <div className="font-mono font-bold text-sm text-stone-900">
-                            {formatRupees(sale.total)}
+                        <div className="text-right flex-shrink-0 flex items-center gap-2">
+                          <div>
+                            <div className="font-mono font-bold text-sm text-stone-900">
+                              {formatRupees(sale.total)}
+                            </div>
+                            <span
+                              className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                                sale.status === 'completed'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {sale.status}
+                            </span>
                           </div>
-                          <span
-                            className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                              sale.status === 'completed'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}
+
+                          <button
+                            type="button"
+                            onClick={() => setSaleToDelete(sale)}
+                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition"
+                            title="Delete Wrong Bill & Restore Stock"
                           >
-                            {sale.status}
-                          </span>
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     );
@@ -1952,7 +1965,7 @@ export default function OwnerPortal({
                                 )}
                               </div>
 
-                              <div className="flex items-center gap-3 shrink-0">
+                              <div className="flex items-center gap-2 shrink-0">
                                 <span className="font-mono font-bold text-stone-900 text-sm">
                                   {formatRupees(s.total)}
                                 </span>
@@ -1966,6 +1979,15 @@ export default function OwnerPortal({
                                 >
                                   <Receipt className="w-3 h-3 text-amber-700" />
                                   <span>{reprintingSaleId === s.id ? 'Printing...' : 'Reprint'}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setSaleToDelete(s)}
+                                  className="p-1 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 border border-stone-200 hover:border-rose-200 transition"
+                                  title="Delete Wrong Bill & Restore Stock"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             </div>
@@ -3147,6 +3169,13 @@ export default function OwnerPortal({
         onCustomerCreated={async () => {
           await onRefreshData();
         }}
+      />
+
+      <DeleteSaleModal
+        isOpen={Boolean(saleToDelete)}
+        sale={saleToDelete}
+        onClose={() => setSaleToDelete(null)}
+        onDeleted={onRefreshData}
       />
     </div>
   );

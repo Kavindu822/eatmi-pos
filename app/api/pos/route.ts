@@ -977,6 +977,187 @@ export async function POST(req: NextRequest) {
     }
 
     // =============================================================
+    // 10b. ACTION: delete_sale (Delete Wrong Bill & Restore Stock)
+    // =============================================================
+    if (b.action === 'delete_sale') {
+      const id = String(b.id || '').trim();
+      if (!id) {
+        return NextResponse.json({ error: 'Sale ID is required.' }, { status: 400 });
+      }
+      const now = new Date().toISOString();
+      const restoreStock = b.restoreStock !== false;
+
+      if (isCloud) {
+        const turso = getTursoClient();
+        const saleRes = await turso.execute({ sql: 'SELECT * FROM sales WHERE id=?', args: [id] });
+        const sale = saleRes.rows[0];
+        if (!sale) {
+          return NextResponse.json({ error: 'Bill record not found.' }, { status: 404 });
+        }
+
+        // 1. Restore product stock
+        if (restoreStock) {
+          let items: any[] = [];
+          try {
+            items = typeof sale.items === 'string' ? JSON.parse(sale.items) : (sale.items || []);
+          } catch (e) {
+            items = [];
+          }
+
+          for (const it of items) {
+            const qty = Math.max(1, Math.floor(Number(it.qty) || 1));
+            let prod: any = null;
+            if (it.id) {
+              const pRes = await turso.execute({ sql: 'SELECT * FROM products WHERE id=?', args: [String(it.id)] });
+              prod = pRes.rows[0];
+            }
+            if (!prod && it.sku) {
+              const pRes = await turso.execute({ sql: 'SELECT * FROM products WHERE sku=?', args: [String(it.sku)] });
+              prod = pRes.rows[0];
+            }
+            if (!prod && it.name) {
+              const pRes = await turso.execute({ sql: 'SELECT * FROM products WHERE name=?', args: [String(it.name)] });
+              prod = pRes.rows[0];
+            }
+            if (prod) {
+              const newStock = Number(prod.stock || 0) + qty;
+              await turso.execute({
+                sql: 'UPDATE products SET stock=?, updated_at=? WHERE id=?',
+                args: [newStock, now, prod.id]
+              });
+            }
+          }
+        }
+
+        // 2. Revert customer points and spent
+        if (sale.customer_id) {
+          try {
+            const custRes = await turso.execute({ sql: 'SELECT * FROM customers WHERE id=?', args: [String(sale.customer_id)] });
+            const cust = custRes.rows[0];
+            if (cust) {
+              const earned = Math.max(0, Math.floor(Number(sale.earned) || 0));
+              const redeemed = Math.max(0, Math.floor(Number(sale.redeemed) || 0));
+              const saleTotal = Math.max(0, Math.floor(Number(sale.total) || 0));
+
+              const newPoints = Math.max(0, Number(cust.points || 0) - earned + redeemed);
+              const newSpent = Math.max(0, Number(cust.spent || 0) - saleTotal);
+              const newVisits = Math.max(0, Number(cust.visits || 0) - 1);
+
+              await turso.execute({
+                sql: 'UPDATE customers SET points=?, spent=?, visits=?, updated_at=? WHERE id=?',
+                args: [newPoints, newSpent, newVisits, now, cust.id]
+              });
+            }
+          } catch (e) {}
+        }
+
+        // 3. Delete sale and record tombstone
+        await turso.execute({ sql: 'DELETE FROM sales WHERE id=?', args: [id] });
+        await turso.execute({
+          sql: 'INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)',
+          args: [id, 'sales', now]
+        });
+
+        return NextResponse.json({
+          ok: true,
+          message: `Bill #${id} deleted successfully. Stock and revenue have been restored.`
+        });
+      }
+
+      // --- LOCAL ENVIRONMENT (SQLite + Turso Sync) ---
+      const { getDatabase } = await import('@/lib/db');
+      const db = getDatabase();
+
+      let sale = db.prepare('SELECT * FROM sales WHERE id=?').get(id) as any;
+      if (!sale) {
+        try {
+          const turso = getTursoClient();
+          const sRes = await turso.execute({ sql: 'SELECT * FROM sales WHERE id=?', args: [id] });
+          sale = sRes.rows[0];
+        } catch (e) {}
+      }
+
+      if (!sale) {
+        return NextResponse.json({ error: 'Bill record not found.' }, { status: 404 });
+      }
+
+      // 1. Restore product stock
+      if (restoreStock) {
+        let items: any[] = [];
+        try {
+          items = typeof sale.items === 'string' ? JSON.parse(sale.items) : (sale.items || []);
+        } catch (e) {
+          items = [];
+        }
+
+        for (const it of items) {
+          const qty = Math.max(1, Math.floor(Number(it.qty) || 1));
+          let prod: any = null;
+          if (it.id) prod = db.prepare('SELECT * FROM products WHERE id=?').get(String(it.id)) as any;
+          if (!prod && it.sku) prod = db.prepare('SELECT * FROM products WHERE sku=?').get(String(it.sku)) as any;
+          if (!prod && it.name) prod = db.prepare('SELECT * FROM products WHERE name=?').get(String(it.name)) as any;
+
+          if (prod) {
+            const newStock = Number(prod.stock || 0) + qty;
+            db.prepare('UPDATE products SET stock=?, updated_at=? WHERE id=?').run(newStock, now, prod.id);
+
+            try {
+              const turso = getTursoClient();
+              await turso.execute({
+                sql: 'UPDATE products SET stock=?, updated_at=? WHERE id=?',
+                args: [newStock, now, prod.id]
+              });
+            } catch (e) {}
+          }
+        }
+      }
+
+      // 2. Revert customer points and spent
+      if (sale.customer_id) {
+        try {
+          const cust = db.prepare('SELECT * FROM customers WHERE id=?').get(String(sale.customer_id)) as any;
+          if (cust) {
+            const earned = Math.max(0, Math.floor(Number(sale.earned) || 0));
+            const redeemed = Math.max(0, Math.floor(Number(sale.redeemed) || 0));
+            const saleTotal = Math.max(0, Math.floor(Number(sale.total) || 0));
+
+            const newPoints = Math.max(0, Number(cust.points || 0) - earned + redeemed);
+            const newSpent = Math.max(0, Number(cust.spent || 0) - saleTotal);
+            const newVisits = Math.max(0, Number(cust.visits || 0) - 1);
+
+            db.prepare('UPDATE customers SET points=?, spent=?, visits=?, updated_at=? WHERE id=?').run(newPoints, newSpent, newVisits, now, cust.id);
+
+            try {
+              const turso = getTursoClient();
+              await turso.execute({
+                sql: 'UPDATE customers SET points=?, spent=?, visits=?, updated_at=? WHERE id=?',
+                args: [newPoints, newSpent, newVisits, now, cust.id]
+              });
+            } catch (e) {}
+          }
+        } catch (e) {}
+      }
+
+      // 3. Delete sale and record tombstone
+      db.prepare('DELETE FROM sales WHERE id=?').run(id);
+      db.prepare('INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)').run(id, 'sales', now);
+
+      try {
+        const turso = getTursoClient();
+        await turso.execute({ sql: 'DELETE FROM sales WHERE id=?', args: [id] });
+        await turso.execute({
+          sql: 'INSERT OR REPLACE INTO deleted_records(id, table_name, deleted_at) VALUES(?, ?, ?)',
+          args: [id, 'sales', now]
+        });
+      } catch (cloudErr) {}
+
+      return NextResponse.json({
+        ok: true,
+        message: `Bill #${id} deleted successfully. Stock and revenue have been restored.`
+      });
+    }
+
+    // =============================================================
     // 11. ACTION: verify_pin
     // =============================================================
     if (b.action === 'verify_pin') {

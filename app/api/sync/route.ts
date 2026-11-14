@@ -54,6 +54,7 @@ export async function POST() {
         // Apply deletion to local SQLite
         if (d.table_name === 'products') db.prepare('DELETE FROM products WHERE id=?').run(id);
         if (d.table_name === 'categories') db.prepare('DELETE FROM categories WHERE id=?').run(id);
+        if (d.table_name === 'sales') db.prepare('DELETE FROM sales WHERE id=?').run(id);
         if (d.table_name === 'customers') {
           try { db.prepare('UPDATE sales SET customer_id = NULL WHERE customer_id = ?').run(id); } catch {}
           db.prepare('DELETE FROM customers WHERE id=?').run(id);
@@ -63,6 +64,7 @@ export async function POST() {
         // Apply deletion to Turso Cloud
         if (d.table_name === 'products') await turso.execute({ sql: 'DELETE FROM products WHERE id=?', args: [id] });
         if (d.table_name === 'categories') await turso.execute({ sql: 'DELETE FROM categories WHERE id=?', args: [id] });
+        if (d.table_name === 'sales') await turso.execute({ sql: 'DELETE FROM sales WHERE id=?', args: [id] });
         if (d.table_name === 'customers') {
           try { await turso.execute({ sql: 'UPDATE sales SET customer_id = NULL WHERE customer_id = ?', args: [id] }); } catch {}
           await turso.execute({ sql: 'DELETE FROM customers WHERE id=?', args: [id] });
@@ -341,7 +343,11 @@ export async function POST() {
     // -------------------------------------------------------------
     // STEP 6: BIDIRECTIONAL SALES SYNC
     // -------------------------------------------------------------
-    const pendingSales = db.prepare('SELECT * FROM sales WHERE synced = 0').all() as any[];
+    const pendingSales = db.prepare(`
+      SELECT * FROM sales 
+      WHERE synced = 0 
+        AND id NOT IN (SELECT id FROM deleted_records WHERE table_name = 'sales')
+    `).all() as any[];
     let pushedCount = 0;
 
     for (const s of pendingSales) {
@@ -367,9 +373,12 @@ export async function POST() {
     try {
       const tursoSalesRes = await turso.execute('SELECT * FROM sales ORDER BY created DESC LIMIT 200');
       const localSaleIds = new Set((db.prepare('SELECT id FROM sales').all() as any[]).map(r => r.id));
+      const deletedSaleIds = new Set(
+        (db.prepare("SELECT id FROM deleted_records WHERE table_name = 'sales'").all() as any[]).map(r => String(r.id))
+      );
 
       for (const ts of tursoSalesRes.rows) {
-        if (!localSaleIds.has(String(ts.id))) {
+        if (!localSaleIds.has(String(ts.id)) && !deletedSaleIds.has(String(ts.id))) {
           db.prepare(`
             INSERT OR IGNORE INTO sales(id, created, customer_id, customer_name, items, subtotal, discount, total, earned, redeemed, payment, tendered, order_type, table_no, notes, status, cashier, synced)
             VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
