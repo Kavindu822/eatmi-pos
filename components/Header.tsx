@@ -66,7 +66,6 @@ export default function Header({
                   Cloud POS
                 </span>
               </div>
-              <p className="text-[11px] text-stone-400">Artisan Food & Bakery · Sri Lanka</p>
             </div>
           </div>
 
