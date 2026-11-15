@@ -40,6 +40,7 @@ export interface CartItem {
   name: string;
   sku: string;
   price: number; // in cents
+  cost?: number; // in cents
   qty: number;
   image?: string;
   modifiers?: string;

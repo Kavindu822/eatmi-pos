@@ -178,6 +178,7 @@ export default function PosRegister({
           name: product.name,
           sku: product.sku,
           price: product.price,
+          cost: product.cost || 0,
           qty: 1,
           image: product.image || '',
           modifiers,

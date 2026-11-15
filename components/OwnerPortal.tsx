@@ -279,6 +279,15 @@ export default function OwnerPortal({
     let qrRevenue = 0;
     let totalDiscounts = 0;
     let totalRedeemed = 0;
+    let totalCost = 0;
+
+    // Create a product lookup map for fast SKU/ID/name matching
+    const prodMap = new Map<string, Product>();
+    for (const p of products) {
+      if (p.id) prodMap.set(p.id, p);
+      if (p.sku) prodMap.set(p.sku, p);
+      if (p.name) prodMap.set(p.name.toLowerCase().trim(), p);
+    }
 
     for (const s of filteredReportSales) {
       grossSales += s.total || 0;
@@ -288,10 +297,34 @@ export default function OwnerPortal({
       if (s.payment === 'Cash') cashRevenue += s.total || 0;
       else if (s.payment === 'Card') cardRevenue += s.total || 0;
       else if (s.payment === 'QR') qrRevenue += s.total || 0;
+
+      // Calculate cost of items in this sale (Selling Price - Cost = Profit)
+      try {
+        const items = typeof s.items === 'string' ? JSON.parse(s.items) : (s.items || []);
+        if (Array.isArray(items)) {
+          for (const it of items) {
+            const qty = Number(it.qty) || 1;
+            let itemCost = 0;
+            if (typeof it.cost === 'number' && it.cost > 0) {
+              itemCost = it.cost;
+            } else {
+              const matched = (it.id && prodMap.get(it.id)) ||
+                              (it.sku && prodMap.get(it.sku)) ||
+                              (it.name && prodMap.get(it.name.toLowerCase().trim()));
+              if (matched && typeof matched.cost === 'number') {
+                itemCost = matched.cost;
+              }
+            }
+            totalCost += itemCost * qty;
+          }
+        }
+      } catch (e) {}
     }
 
     const orderCount = filteredReportSales.length;
     const avgOrderValue = orderCount > 0 ? Math.round(grossSales / orderCount) : 0;
+    const totalProfit = Math.max(0, grossSales - totalCost);
+    const profitMargin = grossSales > 0 ? Math.round((totalProfit / grossSales) * 100) : 0;
 
     return {
       grossSales,
@@ -300,10 +333,13 @@ export default function OwnerPortal({
       qrRevenue,
       totalDiscounts,
       totalRedeemed,
+      totalCost,
+      totalProfit,
+      profitMargin,
       orderCount,
       avgOrderValue
     };
-  }, [filteredReportSales]);
+  }, [filteredReportSales, products]);
 
   // Day-by-Day Historical Archive grouping ALL sales
   const dailyArchive = useMemo(() => {
@@ -408,7 +444,8 @@ export default function OwnerPortal({
     const html = generateZReportHtml({
       periodLabel: customLabel || reportPeriodLabel,
       sales: targetSales,
-      settings
+      settings,
+      products
     });
     printReceiptHtml(html);
   };
@@ -1003,10 +1040,9 @@ export default function OwnerPortal({
                       items = JSON.parse(sale.items);
                     } catch (e) {}
 
-                    const timeStr = new Date(sale.created).toLocaleTimeString('en-US', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true
+                    const dateTimeStr = new Date(sale.created).toLocaleString('en-LK', {
+                      dateStyle: 'short',
+                      timeStyle: 'short'
                     });
 
                     return (
@@ -1017,7 +1053,7 @@ export default function OwnerPortal({
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-bold text-stone-900">#{sale.id}</span>
-                            <span className="text-stone-400 font-mono">{timeStr}</span>
+                            <span className="text-stone-400 font-mono text-[11px]">{dateTimeStr}</span>
                             <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-stone-200 text-stone-700 uppercase">
                               {sale.order_type}
                             </span>
@@ -1799,8 +1835,8 @@ export default function OwnerPortal({
                     </div>
                   </div>
 
-                  {/* Settlement Summary Table (Gross, Cash, Card, QR) */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {/* Settlement Summary Table (Gross, Cash, Card, QR, Profit) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                     <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200">
                       <span className="text-[11px] font-semibold text-stone-500">Gross Sales:</span>
                       <div className="font-mono font-extrabold text-lg text-stone-900 mt-1">
@@ -1850,6 +1886,21 @@ export default function OwnerPortal({
                         {settlementStats.grossSales > 0
                           ? `${Math.round((settlementStats.qrRevenue / settlementStats.grossSales) * 100)}% of total`
                           : '0%'}
+                      </div>
+                    </div>
+
+                    {/* 5th Square: Estimated Profit (Selling Price - Cost = Profit) */}
+                    <div className="p-3.5 rounded-xl bg-purple-50/60 border border-purple-200/80 col-span-2 sm:col-span-1">
+                      <span className="text-[11px] font-semibold text-purple-900 flex items-center gap-1">
+                        <TrendingUp className="w-3.5 h-3.5 text-purple-700" /> Estimated Profit:
+                      </span>
+                      <div className="font-mono font-extrabold text-lg text-purple-800 mt-1">
+                        {formatRupees(settlementStats.totalProfit)}
+                      </div>
+                      <div className="text-[10px] text-purple-700/80 mt-0.5">
+                        {settlementStats.totalCost > 0
+                          ? `${settlementStats.profitMargin}% margin (Cost: ${formatRupees(settlementStats.totalCost)})`
+                          : 'Cost: Rs. 0.00 (100% margin)'}
                       </div>
                     </div>
                   </div>

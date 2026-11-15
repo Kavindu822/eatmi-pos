@@ -1,4 +1,4 @@
-import { Sale } from './types';
+import { Sale, Product } from './types';
 import { formatRupees, formatShortRupees } from './utils';
 
 export interface ReceiptOptions {
@@ -471,12 +471,14 @@ export interface ZReportOptions {
   periodLabel: string;
   sales: Sale[];
   settings?: Record<string, string>;
+  products?: Product[];
 }
 
 export function generateZReportHtml({
   periodLabel,
   sales,
-  settings = {}
+  settings = {},
+  products = []
 }: ZReportOptions): string {
   const storeName = settings.receipt_store_name || 'EATmi';
   const tagline = settings.receipt_tagline || '';
@@ -500,8 +502,17 @@ export function generateZReportHtml({
   let qrRevenue = 0;
   let totalDiscounts = 0;
   let totalRedeemed = 0;
+  let totalCost = 0;
 
   const itemMap = new Map<string, { qty: number; revenue: number }>();
+  const prodMap = new Map<string, Product>();
+  if (products && products.length > 0) {
+    for (const p of products) {
+      if (p.id) prodMap.set(p.id, p);
+      if (p.sku) prodMap.set(p.sku, p);
+      if (p.name) prodMap.set(p.name.toLowerCase().trim(), p);
+    }
+  }
 
   for (const s of sales) {
     grossSales += s.total || 0;
@@ -516,10 +527,24 @@ export function generateZReportHtml({
       const lineItems = typeof s.items === 'string' ? JSON.parse(s.items) : s.items;
       if (Array.isArray(lineItems)) {
         for (const it of lineItems) {
+          const qty = it.qty || 1;
           const cur = itemMap.get(it.name) || { qty: 0, revenue: 0 };
-          cur.qty += it.qty || 1;
-          cur.revenue += (it.price || 0) * (it.qty || 1);
+          cur.qty += qty;
+          cur.revenue += (it.price || 0) * qty;
           itemMap.set(it.name, cur);
+
+          let itemCost = 0;
+          if (typeof it.cost === 'number' && it.cost > 0) {
+            itemCost = it.cost;
+          } else if (prodMap.size > 0) {
+            const matched = (it.id && prodMap.get(it.id)) ||
+                            (it.sku && prodMap.get(it.sku)) ||
+                            (it.name && prodMap.get(it.name.toLowerCase().trim()));
+            if (matched && typeof matched.cost === 'number') {
+              itemCost = matched.cost;
+            }
+          }
+          totalCost += itemCost * qty;
         }
       }
     } catch {}
@@ -628,6 +653,16 @@ export function generateZReportHtml({
       <span>GROSS SALES:</span>
       <span>${formatRupees(grossSales)}</span>
     </div>
+    ${totalCost > 0 ? `
+      <div class="row" style="font-size: 9.5px; color: #444;">
+        <span>Cost of Goods (COGS):</span>
+        <span>-${formatRupees(totalCost)}</span>
+      </div>
+      <div class="row" style="font-size: 11.5px; font-weight: 800; margin-top: 2px;">
+        <span>ESTIMATED PROFIT:</span>
+        <span>${formatRupees(Math.max(0, grossSales - totalCost))}</span>
+      </div>
+    ` : ''}
 
     <div class="divider"></div>
 
