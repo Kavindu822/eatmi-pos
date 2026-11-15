@@ -125,6 +125,57 @@ export default function ThermalReceiptModal({
     });
   };
 
+  // 3. Print Customer Bill & Send Email (Simultaneous 1-Click Action)
+  const handlePrintAndSend = async () => {
+    // A) Print customer bill and kick drawer immediately
+    handlePrintCustomerBill();
+
+    // B) Determine recipient email
+    const targetEmail = sendEmail.trim() || customer?.email?.trim();
+
+    if (targetEmail) {
+      setIsSendingEmail(true);
+      setPrintStatus(`Bill printing! Sending e-bill to ${targetEmail}...`);
+      setShowWebmailOptions(false);
+
+      try {
+        const res = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sale,
+            to: targetEmail,
+            customerPointsBalance
+          })
+        });
+
+        const data = await res.json();
+        if (data.ok) {
+          setPrintStatus(`Printed & digital bill emailed to ${targetEmail}!`);
+        } else if (data.notConfigured) {
+          setActiveSlip('send');
+          setSendFeedback('Bill printed. (Server SMTP not set up in Owner Portal yet - use Webmail below)');
+          setSendFeedbackType('warning');
+          setShowWebmailOptions(true);
+        } else {
+          setActiveSlip('send');
+          setSendFeedback(data.error || 'Bill printed, but could not send email.');
+          setSendFeedbackType('error');
+        }
+      } catch (err: any) {
+        setPrintStatus('Bill printed. (Network error while sending email)');
+      } finally {
+        setIsSendingEmail(false);
+        setTimeout(() => setPrintStatus(''), 4000);
+      }
+    } else {
+      // If customer has no email address attached yet, switch to Send tab so cashier can enter it
+      setActiveSlip('send');
+      setSendFeedback('Bill printed! Please enter customer email above and click Send.');
+      setSendFeedbackType('info');
+    }
+  };
+
   const formattedDate = new Date(sale.created).toLocaleString('en-LK', {
     dateStyle: 'medium',
     timeStyle: 'short'
@@ -660,8 +711,13 @@ export default function ThermalReceiptModal({
                     </p>
                   )}
                   <p className="text-[10px] text-stone-600">
-                    {address} {phone ? `· Tel: ${phone}` : ''}
+                    {address}
                   </p>
+                  {phone && (
+                    <p className="text-[10px] text-stone-600">
+                      Tel: {phone}
+                    </p>
+                  )}
                   <div className="mt-1 text-[9px] inline-block border border-black px-2 py-0.5 font-semibold uppercase text-black">
                     {headerNote}
                   </div>
@@ -929,6 +985,18 @@ export default function ThermalReceiptModal({
             >
               <Printer className="w-3.5 h-3.5 text-amber-400" />
               <span>Print Bill (1x)</span>
+            </button>
+
+            {/* Print + Send (Both in 1 Click) */}
+            <button
+              type="button"
+              onClick={handlePrintAndSend}
+              disabled={isSendingEmail}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold shadow-md transition disabled:opacity-50"
+              title="Prints receipt and emails customer digital bill simultaneously in 1 click"
+            >
+              <Printer className="w-3.5 h-3.5 text-emerald-200" />
+              <span>{isSendingEmail ? 'Sending...' : 'Print + Send'}</span>
             </button>
           </div>
         </div>

@@ -421,8 +421,21 @@ export async function POST() {
         const localTime = local?.updated_at ? new Date(local.updated_at).getTime() : 0;
         const remoteTime = remote?.updated_at ? new Date(remote.updated_at).getTime() : 0;
 
+        // Special case: Optional settings like receipt_tagline where empty string is an intentional user choice
+        if (key === 'receipt_tagline') {
+          if (localTime >= remoteTime) {
+            tursoBatch.push({
+              sql: 'INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)',
+              args: [key, localVal, local?.updated_at || new Date().toISOString()]
+            });
+          } else {
+            db.prepare('INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)').run(
+              key, remoteVal, remote?.updated_at || new Date().toISOString()
+            );
+          }
+        }
         // 1. Non-empty vs Empty: NEVER overwrite filled settings with empty strings!
-        if (localVal && !remoteVal) {
+        else if (localVal && !remoteVal) {
           tursoBatch.push({
             sql: 'INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES(?, ?, ?)',
             args: [key, localVal, local?.updated_at || new Date().toISOString()]

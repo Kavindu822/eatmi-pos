@@ -112,8 +112,9 @@ export async function POST(req: NextRequest) {
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e7e5e4; border-radius: 16px; background-color: #fafaf9;">
             <div style="text-align: center; margin-bottom: 20px;">
               <h2 style="color: #d97706; margin: 0; font-size: 20px; text-transform: uppercase;">${storeName}</h2>
-              <p style="color: #78716c; font-size: 12px; margin: 4px 0 0 0;">${tagline}</p>
-              <p style="color: #78716c; font-size: 11px; margin: 2px 0 0 0;">${address} · Tel: ${phone}</p>
+              ${tagline ? `<p style="color: #78716c; font-size: 12px; margin: 4px 0 0 0;">${tagline}</p>` : ''}
+              <p style="color: #78716c; font-size: 11px; margin: 2px 0 0 0;">${address}</p>
+              ${phone ? `<p style="color: #78716c; font-size: 11px; margin: 2px 0 0 0;">Tel: ${phone}</p>` : ''}
             </div>
             <div style="background-color: #ffffff; padding: 20px; border-radius: 12px; border: 1px solid #e7e5e4;">
               <h3 style="color: #166534; margin-top: 0; font-size: 16px;">✅ Email Service Connected!</h3>
@@ -319,8 +320,9 @@ export async function POST(req: NextRequest) {
                 : ''
             }
             <p style="margin: 4px 0 0 0; font-size: 11px; color: #a8a29e;">
-              ${address} · Tel: ${phone}
+              ${address}
             </p>
+            ${phone ? `<p style="margin: 2px 0 0 0; font-size: 11px; color: #a8a29e;">Tel: ${phone}</p>` : ''}
             <div style="margin-top: 12px; display: inline-block; background-color: #292524; color: #f5f5f4; padding: 4px 12px; border-radius: 6px; font-size: 10px; font-weight: bold; letter-spacing: 1px; border: 1px solid #44403c;">
               TAX INVOICE / RECEIPT
             </div>

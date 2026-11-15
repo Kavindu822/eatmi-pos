@@ -235,6 +235,11 @@ export function generateReceiptHtml({
       font-weight: 400;
       margin-top: 1px;
     }
+    .phone {
+      font-size: 9.5px;
+      font-weight: 400;
+      margin-top: 1px;
+    }
     .badge {
       display: inline-block;
       border: 1px solid #000000;
@@ -339,7 +344,8 @@ export function generateReceiptHtml({
       ${showLogo ? `<img src="/receipt-logo.png" alt="Logo" class="logo" />` : ''}
       <div class="store-name">${storeName}</div>
       ${tagline ? `<div class="tagline">${tagline}</div>` : ''}
-      <div class="address">${address} ${phone ? `· Tel: ${phone}` : ''}</div>
+      <div class="address">${address}</div>
+      ${phone ? `<div class="phone">Tel: ${phone}</div>` : ''}
       <div class="badge">${headerNote}</div>
     </div>
 

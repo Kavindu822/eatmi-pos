@@ -21,17 +21,17 @@ if (-not $isListening) {
     }
 }
 
-# Open Chrome in Dedicated App Mode (Clean borderless window without URL bar)
+# Open Chrome in Dedicated App Mode with Instant Silent Kiosk Printing (No Print Dialog)
 $chrome1 = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 $chrome2 = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
 $edge    = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 
 if (Test-Path $chrome1) {
-    Start-Process -FilePath $chrome1 -ArgumentList "--app=http://localhost:8787"
+    Start-Process -FilePath $chrome1 -ArgumentList "--app=http://localhost:8787 --kiosk-printing"
 } elseif (Test-Path $chrome2) {
-    Start-Process -FilePath $chrome2 -ArgumentList "--app=http://localhost:8787"
+    Start-Process -FilePath $chrome2 -ArgumentList "--app=http://localhost:8787 --kiosk-printing"
 } elseif (Test-Path $edge) {
-    Start-Process -FilePath $edge -ArgumentList "--app=http://localhost:8787"
+    Start-Process -FilePath $edge -ArgumentList "--app=http://localhost:8787 --kiosk-printing"
 } else {
     Start-Process "http://localhost:8787"
 }

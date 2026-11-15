@@ -127,7 +127,7 @@ export default function OwnerPortal({
 
   React.useEffect(() => {
     if (settings.receipt_store_name) setReceiptStoreName(settings.receipt_store_name);
-    if (settings.receipt_tagline) setReceiptTagline(settings.receipt_tagline);
+    if (settings.receipt_tagline !== undefined) setReceiptTagline(settings.receipt_tagline);
     if (settings.receipt_address) setReceiptAddress(settings.receipt_address);
     if (settings.receipt_phone) setReceiptPhone(settings.receipt_phone);
     if (settings.receipt_header_note) setReceiptHeaderNote(settings.receipt_header_note);
@@ -2561,9 +2561,10 @@ export default function OwnerPortal({
                             {receiptTagline && (
                               <div className="text-[9px] uppercase text-stone-600">{receiptTagline}</div>
                             )}
-                            <div className="text-[9px] text-stone-600">
-                              {receiptAddress} {receiptPhone ? `· ${receiptPhone}` : ''}
-                            </div>
+                            <div className="text-[9px] text-stone-600">{receiptAddress}</div>
+                            {receiptPhone && (
+                              <div className="text-[9px] text-stone-600">Tel: {receiptPhone}</div>
+                            )}
                             <div className="mt-1 text-[8.5px] inline-block border border-black px-1.5 py-0.5 font-semibold uppercase">
                               {receiptHeaderNote}
                             </div>

@@ -33,6 +33,26 @@ if ($Action -eq 'enable') {
     if (Test-Path $iconPath) { $dsc.IconLocation = $iconPath }
     $dsc.Save()
 
+    # 3. Cloud POS Shortcut (Direct Vercel with Instant Silent Kiosk Printing)
+    $cloudShortcut = Join-Path $desktopFolder 'EATmi Cloud POS.lnk'
+    $chrome1 = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+    $chrome2 = 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'
+    $edge    = 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
+    $browserExe = $null
+    if (Test-Path $chrome1) { $browserExe = $chrome1 }
+    elseif (Test-Path $chrome2) { $browserExe = $chrome2 }
+    elseif (Test-Path $edge) { $browserExe = $edge }
+
+    if ($browserExe) {
+        $csc = $WshShell.CreateShortcut($cloudShortcut)
+        $csc.TargetPath = $browserExe
+        $csc.Arguments = '--app=https://eatmi-pos.vercel.app --kiosk-printing'
+        $csc.Description = 'EATmi Cloud POS (Silent Direct Printing)'
+        if (Test-Path $iconPath) { $csc.IconLocation = $iconPath }
+        $csc.Save()
+        Write-Host "Created cloud POS silent-print shortcut: $cloudShortcut"
+    }
+
     # Notify Windows Explorer to refresh desktop icon cache
     try {
         Add-Type -TypeDefinition @"
