@@ -221,6 +221,7 @@ export default function PosRegister({
     setTenderedInput('');
     setNotes('');
     setTableNo('');
+    setPaymentMethod('Cash');
   };
 
   // Tender shortcuts

@@ -27,6 +27,7 @@ import { formatRupees, formatShortRupees } from '@/lib/utils';
 import { Sale, Customer } from '@/lib/types';
 import { generateReceiptHtml, printReceiptHtml } from '@/lib/receipt';
 import { kickCashDrawer } from '@/lib/drawer';
+import { printDirectThermal } from '@/lib/printer';
 
 interface ThermalReceiptModalProps {
   isOpen: boolean;
@@ -83,17 +84,29 @@ export default function ThermalReceiptModal({
     items = [];
   }
 
-  // 1. Print Customer Bill (Exact 1 Single Copy)
-  const handlePrintCustomerBill = () => {
+  // 1. Print Customer Bill (Exact 1 Single Copy - Direct Silent Print)
+  const handlePrintCustomerBill = async () => {
     setPrintStatus('Printing Customer Bill & Kicking Drawer...');
-    // Automatically trigger cash drawer kick pulse
-    kickCashDrawer().then(res => {
-      if (res.ok) {
-        setPrintStatus('Bill Sent & Cash Drawer Opened!');
-        setTimeout(() => setPrintStatus(''), 2500);
-      }
-    }).catch(() => {});
 
+    // Automatically trigger cash drawer kick pulse in background
+    kickCashDrawer().catch(() => {});
+
+    // Try direct hardware print to POS-80C (bypasses Chrome print dialog entirely!)
+    try {
+      const res = await printDirectThermal({
+        sale,
+        slipType: 'customer',
+        settings,
+        customerPointsBalance
+      });
+      if (res.ok) {
+        setPrintStatus('Customer Bill Printed & Drawer Opened!');
+        setTimeout(() => setPrintStatus(''), 2500);
+        return; // Silent direct print succeeded - zero dialogs!
+      }
+    } catch (e) {}
+
+    // Fallback to browser print only if direct daemon is unreachable
     const html = generateReceiptHtml({
       sale,
       customerPointsBalance,
@@ -108,9 +121,26 @@ export default function ThermalReceiptModal({
     });
   };
 
-  // 2. Print Kitchen Ticket (Exact 1 Single Copy)
-  const handlePrintKitchenKot = () => {
+  // 2. Print Kitchen Ticket (Exact 1 Single Copy - Direct Silent Print)
+  const handlePrintKitchenKot = async () => {
     setPrintStatus('Printing Kitchen Ticket (KOT)...');
+
+    // Try direct hardware print to POS-80C (bypasses Chrome print dialog entirely!)
+    try {
+      const res = await printDirectThermal({
+        sale,
+        slipType: 'kitchen',
+        settings,
+        customerPointsBalance
+      });
+      if (res.ok) {
+        setPrintStatus('Kitchen Ticket Printed!');
+        setTimeout(() => setPrintStatus(''), 2500);
+        return; // Silent direct print succeeded - zero dialogs!
+      }
+    } catch (e) {}
+
+    // Fallback to browser print only if direct daemon is unreachable
     const html = generateReceiptHtml({
       sale,
       customerPointsBalance,

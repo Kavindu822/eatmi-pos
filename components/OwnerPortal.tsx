@@ -51,6 +51,7 @@ import { Category, Product, Customer, Sale, SummaryStats } from '@/lib/types';
 import { formatRupees, formatShortRupees, centsToRupees } from '@/lib/utils';
 import { playTapSound, playRegisterSound } from '@/lib/sound';
 import { generateReceiptHtml, printReceiptHtml, generateZReportHtml } from '@/lib/receipt';
+import { printDirectThermal } from '@/lib/printer';
 import CategoryModal from './CategoryModal';
 import ProductModal from './ProductModal';
 import CustomerPointsModal from './CustomerPointsModal';
@@ -108,6 +109,9 @@ export default function OwnerPortal({
   const [loyaltyRateInput, setLoyaltyRateInput] = useState<string>(settings.loyalty_rate_rupees || '300');
   const [isSavingLoyaltyRate, setIsSavingLoyaltyRate] = useState(false);
   const [loyaltyRateMessage, setLoyaltyRateMessage] = useState('');
+
+  // Custom Restock Inputs per Product
+  const [restockInputs, setRestockInputs] = useState<Record<string, string>>({});
 
   // Automated Email & SMTP Settings State
   const [smtpHost, setSmtpHost] = useState(settings.smtp_host || 'smtp.gmail.com');
@@ -423,9 +427,22 @@ export default function OwnerPortal({
   }, [filteredReportSales, reportSearchQuery]);
 
   // Reprint a historical sale receipt
-  const handleReprintReceipt = (sale: Sale) => {
+  const handleReprintReceipt = async (sale: Sale) => {
     playTapSound(audioEnabled);
     setReprintingSaleId(sale.id);
+
+    try {
+      const res = await printDirectThermal({
+        sale,
+        slipType: 'customer',
+        settings
+      });
+      if (res.ok) {
+        setReprintingSaleId(null);
+        return; // Silent direct print - zero dialogs!
+      }
+    } catch (e) {}
+
     const html = generateReceiptHtml({
       sale,
       settings,
@@ -786,7 +803,7 @@ export default function OwnerPortal({
   };
 
   // Test Print (Sample 1-sheet bill or KOT)
-  const handleTestPrint = (type: 'customer' | 'kitchen') => {
+  const handleTestPrint = async (type: 'customer' | 'kitchen') => {
     setTestPrintStatus(`Sending sample ${type === 'customer' ? 'Customer Bill' : 'Kitchen KOT'} to printer...`);
     const earnedPoints = Math.floor(2940 / loyaltyRate);
     const sampleSale: Sale = {
@@ -829,6 +846,21 @@ export default function OwnerPortal({
       receipt_show_barcode: String(receiptShowBarcode),
       loyalty_rate_rupees: String(loyaltyRate)
     };
+
+    // Try direct thermal printer first
+    try {
+      const res = await printDirectThermal({
+        sale: sampleSale,
+        slipType: type,
+        settings: currentSettings,
+        customerPointsBalance: 24
+      });
+      if (res.ok) {
+        setTestPrintStatus(`Sample ${type === 'customer' ? 'Bill' : 'KOT'} printed directly to POS-80C!`);
+        setTimeout(() => setTestPrintStatus(''), 3000);
+        return;
+      }
+    } catch (e) {}
 
     const html = generateReceiptHtml({
       sale: sampleSale,
@@ -1395,14 +1427,41 @@ export default function OwnerPortal({
 
                           <td className="py-2.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              {/* Quick restock +12 */}
-                              <button
-                                onClick={() => handleRestock(p.id, 12)}
-                                className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-amber-100 text-amber-800 text-[10px] font-bold border border-stone-200 transition"
-                                title="Quick Restock +12 baked fresh"
-                              >
-                                +12 Baked
-                              </button>
+                              {/* Custom Restock Qty */}
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  placeholder="+Qty"
+                                  value={restockInputs[p.id] ?? ''}
+                                  onChange={(e) => setRestockInputs(prev => ({ ...prev, [p.id]: e.target.value }))}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const val = parseInt(restockInputs[p.id] || '0', 10);
+                                      if (val > 0) {
+                                        handleRestock(p.id, val);
+                                        setRestockInputs(prev => ({ ...prev, [p.id]: '' }));
+                                      }
+                                    }
+                                  }}
+                                  className="w-14 px-1.5 py-1 text-xs text-center border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono font-bold bg-white text-stone-900"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const val = parseInt(restockInputs[p.id] || '0', 10);
+                                    if (val > 0) {
+                                      handleRestock(p.id, val);
+                                      setRestockInputs(prev => ({ ...prev, [p.id]: '' }));
+                                    }
+                                  }}
+                                  disabled={!restockInputs[p.id] || parseInt(restockInputs[p.id], 10) <= 0}
+                                  className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-[11px] font-bold shadow-xs transition whitespace-nowrap"
+                                  title={`Add quantity to ${p.name}`}
+                                >
+                                  + Add
+                                </button>
+                              </div>
 
                               <button
                                 onClick={() => {
