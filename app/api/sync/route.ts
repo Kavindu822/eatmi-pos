@@ -126,7 +126,66 @@ export async function POST() {
     }
 
     // -------------------------------------------------------------
-    // STEP 4: BIDIRECTIONAL PRODUCTS SYNC
+    // PREPARE SALES CONTEXT FOR STOCK RECONCILIATION
+    // -------------------------------------------------------------
+    // Query pending offline sales from local SQLite
+    const pendingSales = db.prepare(`
+      SELECT * FROM sales 
+      WHERE synced = 0 
+        AND id NOT IN (SELECT id FROM deleted_records WHERE table_name = 'sales')
+    `).all() as any[];
+
+    // Tally total quantities issued offline on the local shop PC
+    const offlineIssuedQty = new Map<string, number>();
+    for (const s of pendingSales) {
+      let items: any[] = [];
+      try {
+        items = typeof s.items === 'string' ? JSON.parse(s.items) : (s.items || []);
+      } catch (e) {
+        items = [];
+      }
+      for (const item of items) {
+        if (item && item.id) {
+          const q = Math.max(0, Number(item.qty) || 0);
+          offlineIssuedQty.set(String(item.id), (offlineIssuedQty.get(String(item.id)) || 0) + q);
+        }
+      }
+    }
+
+    // Query recent sales from Turso Cloud
+    let tursoSalesRes: any = { rows: [] };
+    try {
+      tursoSalesRes = await turso.execute('SELECT * FROM sales ORDER BY created DESC LIMIT 200');
+    } catch (e) {
+      tursoSalesRes = { rows: [] };
+    }
+
+    const localSaleIds = new Set((db.prepare('SELECT id FROM sales').all() as any[]).map(r => String(r.id)));
+    const deletedSaleIds = new Set(
+      (db.prepare("SELECT id FROM deleted_records WHERE table_name = 'sales'").all() as any[]).map(r => String(r.id))
+    );
+
+    // Tally quantities issued in cloud-native sales not yet in local SQLite
+    const cloudIssuedQty = new Map<string, number>();
+    for (const ts of tursoSalesRes.rows) {
+      if (!localSaleIds.has(String(ts.id)) && !deletedSaleIds.has(String(ts.id))) {
+        let items: any[] = [];
+        try {
+          items = typeof ts.items === 'string' ? JSON.parse(String(ts.items)) : (ts.items || []);
+        } catch (e) {
+          items = [];
+        }
+        for (const item of items) {
+          if (item && item.id) {
+            const q = Math.max(0, Number(item.qty) || 0);
+            cloudIssuedQty.set(String(item.id), (cloudIssuedQty.get(String(item.id)) || 0) + q);
+          }
+        }
+      }
+    }
+
+    // -------------------------------------------------------------
+    // STEP 4: BIDIRECTIONAL PRODUCTS SYNC & STOCK BALANCING
     // -------------------------------------------------------------
     const localProducts = db.prepare('SELECT * FROM products').all() as any[];
     const tursoProdRes = await turso.execute('SELECT * FROM products ORDER BY category ASC, name ASC');
@@ -155,30 +214,57 @@ export async function POST() {
           ]
         });
       } else {
-        // Exists in both: compare timestamps
         const localTime = lp.updated_at ? new Date(lp.updated_at).getTime() : 0;
         const tursoTime = tp.updated_at ? new Date(tp.updated_at).getTime() : 0;
 
-        let target = lp;
-        let updateTurso = false;
-        let updateLocal = false;
+        const L = Number(lp.stock || 0);
+        const T = Number(tp.stock || 0);
+        const qOffline = offlineIssuedQty.get(String(lp.id)) || 0;
+        const qCloud = cloudIssuedQty.get(String(lp.id)) || 0;
+
+        const localBase = L + qOffline;
+        const tursoBase = T + qCloud;
+
+        let balancedStock = L;
+
+        if (qOffline === 0 && qCloud === 0) {
+          if (tursoTime > localTime) {
+            balancedStock = T;
+          } else if (localTime > tursoTime) {
+            balancedStock = L;
+          } else {
+            balancedStock = Math.min(L, T);
+          }
+        } else if (tursoBase > localBase) {
+          // Stock was added on Cloud (e.g. Owner restocked +qty on Vercel while shop PC was offline)
+          // Keep owner's added stock (+ add quantity) AND reduce cashier's offline sales (- issuing quantity):
+          balancedStock = Math.max(0, T - qOffline);
+        } else if (tursoTime > localTime) {
+          // Cloud was edited more recently (e.g. inventory audit/adjustment on Cloud)
+          // Reduce cashier's offline sales from the owner's updated baseline:
+          balancedStock = Math.max(0, T - qOffline);
+        } else if (localBase > tursoBase) {
+          // Stock was added locally on shop PC
+          balancedStock = Math.max(0, L - qCloud);
+        } else {
+          // Normal offline sales without restock on either side:
+          balancedStock = Math.max(0, localBase - qOffline - qCloud);
+        }
+
+        let target = { ...lp };
+        let metadataFromCloud = false;
 
         if (tursoTime > localTime) {
-          // Cloud was modified more recently (e.g. Owner added stock or edited on Vercel)
-          target = tp;
-          updateLocal = true;
-        } else if (localTime > tursoTime) {
-          // Local register was modified more recently (e.g. Cashier sold item or restocked locally)
-          target = lp;
-          updateTurso = true;
+          target = { ...tp };
+          metadataFromCloud = true;
         } else {
-          // Both have same timestamp or no timestamp:
-          // Keep lower stock (protect cashier sales deductions from being overwritten)
-          const targetStock = Math.min(Number(lp.stock || 0), Number(tp.stock || 0));
-          if (targetStock !== Number(tp.stock)) updateTurso = true;
-          if (targetStock !== Number(lp.stock)) updateLocal = true;
-          target = { ...lp, stock: targetStock };
+          target = { ...lp };
         }
+        target.stock = balancedStock;
+
+        const syncTimestamp = new Date().toISOString();
+        const updateTurso = Number(tp.stock) !== balancedStock || (!metadataFromCloud && localTime > tursoTime);
+        const updateLocal = Number(lp.stock) !== balancedStock || (metadataFromCloud && tursoTime > localTime);
 
         if (updateTurso) {
           await turso.execute({
@@ -190,9 +276,9 @@ export async function POST() {
                   WHERE id = ?`,
             args: [
               target.name, target.sku, target.category_id || '', target.category,
-              Number(target.price), Number(target.cost || 0), Number(target.stock || 0), String(target.image || ''),
+              Number(target.price), Number(target.cost || 0), Number(balancedStock), String(target.image || ''),
               String(target.badge || ''), String(target.dietary || ''), String(target.description || ''),
-              Number(target.is_active) ? 1 : 0, target.updated_at || '', target.id
+              Number(target.is_active) ? 1 : 0, syncTimestamp, target.id
             ]
           });
         }
@@ -207,9 +293,9 @@ export async function POST() {
             WHERE id = ?
           `).run(
             target.name, target.sku, target.category_id || '', target.category,
-            Number(target.price), Number(target.cost || 0), Number(target.stock || 0), String(target.image || ''),
+            Number(target.price), Number(target.cost || 0), Number(balancedStock), String(target.image || ''),
             String(target.badge || ''), String(target.dietary || ''), String(target.description || ''),
-            Number(target.is_active) ? 1 : 0, target.updated_at || '', target.id
+            Number(target.is_active) ? 1 : 0, syncTimestamp, target.id
           );
         }
       }
@@ -343,11 +429,6 @@ export async function POST() {
     // -------------------------------------------------------------
     // STEP 6: BIDIRECTIONAL SALES SYNC
     // -------------------------------------------------------------
-    const pendingSales = db.prepare(`
-      SELECT * FROM sales 
-      WHERE synced = 0 
-        AND id NOT IN (SELECT id FROM deleted_records WHERE table_name = 'sales')
-    `).all() as any[];
     let pushedCount = 0;
 
     for (const s of pendingSales) {
@@ -371,12 +452,6 @@ export async function POST() {
 
     // Pull any sales from Turso not in local SQLite (limit 200)
     try {
-      const tursoSalesRes = await turso.execute('SELECT * FROM sales ORDER BY created DESC LIMIT 200');
-      const localSaleIds = new Set((db.prepare('SELECT id FROM sales').all() as any[]).map(r => r.id));
-      const deletedSaleIds = new Set(
-        (db.prepare("SELECT id FROM deleted_records WHERE table_name = 'sales'").all() as any[]).map(r => String(r.id))
-      );
-
       for (const ts of tursoSalesRes.rows) {
         if (!localSaleIds.has(String(ts.id)) && !deletedSaleIds.has(String(ts.id))) {
           db.prepare(`

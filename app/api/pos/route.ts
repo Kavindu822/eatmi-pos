@@ -446,18 +446,7 @@ export async function POST(req: NextRequest) {
 
         db.exec('COMMIT');
 
-        // Immediately replicate product stock reductions to Turso Cloud so cloud sync never restores old stock
-        for (const [pid, qty] of requestedQty.entries()) {
-          try {
-            const turso = getTursoClient();
-            await turso.execute({
-              sql: 'UPDATE products SET stock = stock - ?, updated_at = ? WHERE id = ?',
-              args: [qty, now, pid]
-            });
-          } catch (cloudErr) {}
-        }
-
-        // Immediately replicate to Turso Cloud so background sync never restores old points
+        // Immediately replicate to Turso Cloud if online so background sync never restores old points
         if (customer) {
           try {
             const turso = getTursoClient();
